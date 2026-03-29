@@ -122,6 +122,7 @@ jobs:
         with:
           tag_name: "ini-${{ steps.meta.outputs.date }}"
           name: "INI Update ${{ steps.meta.outputs.date }}"
+          prerelease: false
           make_latest: true
           body: |
             ## RDP Wrapper — Automated INI Release
