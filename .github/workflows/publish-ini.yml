@@ -86,8 +86,19 @@ jobs:
           Copy-Item $x64dll.FullName .\Zydis_x64.dll
           Copy-Item $x86dll.FullName .\Zydis_x86.dll
 
+          # Build self-contained zip bundles so manual users can extract-and-run
+          # without needing to rename the DLL or download a second file.
+          foreach ($arch in @('x64', 'x86')) {
+            $bundle = ".\bundle_$arch"
+            New-Item -ItemType Directory -Path $bundle -Force | Out-Null
+            Copy-Item ".\RDPWrapOffsetFinder_$arch.exe" "$bundle\RDPWrapOffsetFinder.exe"
+            Copy-Item ".\Zydis_$arch.dll"               "$bundle\Zydis.dll"
+            Compress-Archive -Path "$bundle\*" -DestinationPath ".\RDPWrapOffsetFinder_$arch.zip" -Force
+            Remove-Item $bundle -Recurse -Force
+          }
+
           Write-Host "Staged binaries:"
-          Get-ChildItem .\RDPWrapOffsetFinder_*.exe, .\Zydis_*.dll |
+          Get-ChildItem .\RDPWrapOffsetFinder_*.exe, .\Zydis_*.dll, .\RDPWrapOffsetFinder_*.zip |
             Format-Table Name, Length
 
           echo "finder_ver=$($release.tag_name)" >> $env:GITHUB_OUTPUT
@@ -125,15 +136,18 @@ jobs:
             | File | Purpose |
             |---|---|
             | `rdpwrap.ini` | Latest offset database for all known termsrv.dll versions |
-            | `RDPWrapOffsetFinder_x64.exe` | Auto-generates offsets for unknown x64 Windows builds |
-            | `RDPWrapOffsetFinder_x86.exe` | Auto-generates offsets for unknown x86 Windows builds |
-            | `Zydis_x64.dll` / `Zydis_x86.dll` | Required runtime for the offset finder |
+            | `RDPWrapOffsetFinder_x64.zip` | x64 finder bundle — extract and run `RDPWrapOffsetFinder.exe` directly |
+            | `RDPWrapOffsetFinder_x86.zip` | x86 finder bundle — extract and run `RDPWrapOffsetFinder.exe` directly |
+            | `RDPWrapOffsetFinder_x64.exe` / `Zydis_x64.dll` | Loose x64 binaries (used by the installer) |
+            | `RDPWrapOffsetFinder_x86.exe` / `Zydis_x86.dll` | Loose x86 binaries (used by the installer) |
 
             The installer fetches `rdpwrap.ini` from this release automatically.
             If your termsrv.dll version is not in the INI, the installer downloads the
             offset finder tools and generates the missing section on-the-fly.
           files: |
             res/rdpwrap.ini
+            RDPWrapOffsetFinder_x64.zip
+            RDPWrapOffsetFinder_x86.zip
             RDPWrapOffsetFinder_x64.exe
             RDPWrapOffsetFinder_x86.exe
             Zydis_x64.dll
