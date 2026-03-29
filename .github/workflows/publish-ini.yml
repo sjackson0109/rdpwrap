@@ -5,6 +5,7 @@ on:
     branches: [main, master]
     paths:
       - 'res/rdpwrap.ini'
+      - 'tools/RDPWrapOffsetFinder/**'
       - '.github/workflows/publish-ini.yml'
   workflow_dispatch:
 
@@ -58,55 +59,22 @@ jobs:
           echo "stamp=$stamp"     >> $env:GITHUB_OUTPUT
           echo "inidate=$iniDate" >> $env:GITHUB_OUTPUT
 
-      # ── Download the latest RDPWrapOffsetFinder release zip from llccd ──────
-      - name: Download RDPWrapOffsetFinder
+      # ── Stage RDPWrapOffsetFinder from committed tools/ ──────────────────────
+      - name: Stage RDPWrapOffsetFinder from tools/
         id: finder
         shell: pwsh
         run: |
-          $zip = "RDPWrapOffsetFinder.zip"
+          $version = (Get-Content tools/RDPWrapOffsetFinder/VERSION -Raw).Trim()
 
-          # Resolve the real latest-release download URL via the GitHub API
-          $apiUrl  = "https://api.github.com/repos/llccd/RDPWrapOffsetFinder/releases/latest"
-          $release = Invoke-RestMethod -Uri $apiUrl -Headers @{ "User-Agent" = "rdpwrap-ci" }
-          $asset   = $release.assets | Where-Object { $_.name -like "*.zip" } | Select-Object -First 1
-          if (-not $asset) { throw "No zip asset found in latest RDPWrapOffsetFinder release" }
+          Copy-Item tools/RDPWrapOffsetFinder/x64/RDPWrapOffsetFinder.exe .\RDPWrapOffsetFinder_x64.exe
+          Copy-Item tools/RDPWrapOffsetFinder/x64/Zydis.dll               .\Zydis_x64.dll
+          Copy-Item tools/RDPWrapOffsetFinder/x86/RDPWrapOffsetFinder.exe .\RDPWrapOffsetFinder_x86.exe
+          Copy-Item tools/RDPWrapOffsetFinder/x86/Zydis.dll               .\Zydis_x86.dll
 
-          Write-Host "Downloading $($asset.browser_download_url)"
-          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip
+          Write-Host "Staged finder tools (version $version):"
+          Get-Item .\RDPWrapOffsetFinder_*.exe, .\Zydis_*.dll | Format-Table Name, Length
 
-          # Expand the archive
-          Expand-Archive -Path $zip -DestinationPath .\finder -Force
-
-          # Diagnostic: show what we got
-          Write-Host "Zip contents:"
-          Get-ChildItem -Recurse .\finder | Select-Object FullName
-
-          # Helper: find a file by name pattern, preferring arch-specific subdirs
-          function Find-Binary($pattern, $archHint) {
-            $hits = Get-ChildItem -Recurse -Filter $pattern .\finder
-            # prefer paths that contain the arch hint
-            $match = $hits | Where-Object { $_.FullName -match $archHint } | Select-Object -First 1
-            if (-not $match) { $match = $hits | Select-Object -First 1 }
-            return $match
-          }
-
-          $x64exe = Find-Binary "RDPWrapOffsetFinder*.exe" "x64"
-          $x86exe = Find-Binary "RDPWrapOffsetFinder*.exe" "x86|Win32|32"
-          $x64dll = Find-Binary "Zydis*.dll"               "x64"
-          $x86dll = Find-Binary "Zydis*.dll"               "x86|Win32|32"
-
-          # If only one exe/dll variant exists, use it for both architectures
-          if (-not $x86exe) { $x86exe = $x64exe }
-          if (-not $x86dll) { $x86dll = $x64dll }
-          if (-not $x64exe) { throw "Could not locate RDPWrapOffsetFinder exe in zip" }
-          if (-not $x64dll) { throw "Could not locate Zydis dll in zip" }
-
-          Copy-Item $x64exe.FullName .\RDPWrapOffsetFinder_x64.exe
-          Copy-Item $x86exe.FullName .\RDPWrapOffsetFinder_x86.exe
-          Copy-Item $x64dll.FullName .\Zydis_x64.dll
-          Copy-Item $x86dll.FullName .\Zydis_x86.dll
-
-          echo "finder_ver=$($release.tag_name)" >> $env:GITHUB_OUTPUT
+          echo "finder_ver=$version" >> $env:GITHUB_OUTPUT
 
       # ── Download the latest rdpWrapper GUI app from sergiye ─────────────────
       - name: Download rdpWrapper (sergiye)
@@ -148,8 +116,7 @@ jobs:
       - name: Create distribution bundles
         shell: pwsh
         run: |
-          # RDPWrapper.zip - complete install package.
-          # Contains both arch DLLs, both arch wrapper exes, latest INI, and scripts.
+          # RDPWrapper.zip - complete install package
           $d = ".\bundle_wrapper"
           New-Item -ItemType Directory -Path $d -Force | Out-Null
           Copy-Item .\rdpwrap_x64.dll    "$d\rdpwrap_x64.dll"
@@ -163,8 +130,7 @@ jobs:
           Compress-Archive -Path "$d\*" -DestinationPath ".\RDPWrapper.zip" -Force
           Remove-Item $d -Recurse -Force
 
-          # RDPWrapOffsetFinder.zip - offset finder with per-arch subfolders.
-          # Extract x64\ or x86\ folder and run RDPWrapOffsetFinder.exe directly.
+          # RDPWrapOffsetFinder.zip - offset finder with per-arch subfolders
           $f = ".\bundle_finder"
           foreach ($arch in @('x64', 'x86')) {
             $dir = "$f\$arch"
