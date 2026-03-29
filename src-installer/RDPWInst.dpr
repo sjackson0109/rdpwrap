@@ -93,6 +93,7 @@ var
   TermServicePID: DWORD;
   ShareSvc: Array of String;
   sShareSvc: String;
+  TermSrvVerTxt: String; // e.g. '10.0.26100.7623' — set by CheckTermsrvVersion
 
 function SupportedArchitecture: Boolean;
 var
@@ -617,7 +618,9 @@ end;
 
 function GitINIFile(var Content: String): Boolean;
 const
-  URL = 'https://raw.githubusercontent.com/stascorp/rdpwrap/master/res/rdpwrap.ini';
+  // Points to the latest release artifact in the sjackson0109 fork.
+  // The publish-ini CI/CD workflow keeps this asset up to date automatically.
+  URL = 'https://github.com/sjackson0109/rdpwrap/releases/latest/download/rdpwrap.ini';
 var
   NetHandle: HINTERNET;
   UrlHandle: HINTERNET;
@@ -843,6 +846,138 @@ begin
   Result := True;
 end;
 
+{ ──────────────────────────────────────────────────────────────────────────────
+  DownloadFileToDisk
+  Downloads the HTTP/HTTPS resource at URL and saves it to DestPath on disk.
+  Returns True only when the destination file exists and is non-empty.
+────────────────────────────────────────────────────────────────────────────── }
+function DownloadFileToDisk(const URL, DestPath: String): Boolean;
+var
+  NetHandle: HINTERNET;
+  UrlHandle: HINTERNET;
+  FileHandle: THandle;
+  Buf: Array[0..4095] of Byte;
+  BytesRead, BytesWritten: DWORD;
+begin
+  Result := False;
+  NetHandle := InternetOpen('RDP Wrapper', INTERNET_OPEN_TYPE_PRECONFIG, nil, nil, 0);
+  if not Assigned(NetHandle) then Exit;
+  UrlHandle := InternetOpenUrl(NetHandle, PChar(URL), nil, 0, INTERNET_FLAG_RELOAD, 0);
+  if not Assigned(UrlHandle) then
+  begin
+    InternetCloseHandle(NetHandle);
+    Exit;
+  end;
+  FileHandle := CreateFile(PChar(DestPath), GENERIC_WRITE, 0, nil,
+    CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
+  if FileHandle = INVALID_HANDLE_VALUE then
+  begin
+    InternetCloseHandle(UrlHandle);
+    InternetCloseHandle(NetHandle);
+    Exit;
+  end;
+  repeat
+    InternetReadFile(UrlHandle, @Buf[0], SizeOf(Buf), BytesRead);
+    if BytesRead > 0 then
+      WriteFile(FileHandle, Buf[0], BytesRead, BytesWritten, nil);
+  until BytesRead = 0;
+  CloseHandle(FileHandle);
+  InternetCloseHandle(UrlHandle);
+  InternetCloseHandle(NetHandle);
+  Result := FileExists(DestPath);
+end;
+
+{ ──────────────────────────────────────────────────────────────────────────────
+  INIHasSection
+  Returns True when the INI file at INIPath contains [Section].
+────────────────────────────────────────────────────────────────────────────── }
+function INIHasSection(const INIPath, Section: String): Boolean;
+var
+  F: TStringList;
+begin
+  Result := False;
+  if not FileExists(INIPath) then Exit;
+  F := TStringList.Create;
+  try
+    F.LoadFromFile(INIPath);
+    Result := Pos('[' + Section + ']', F.Text) > 0;
+  finally
+    F.Free;
+  end;
+end;
+
+{ ──────────────────────────────────────────────────────────────────────────────
+  TryAutoGenerateOffsets
+  If the current termsrv.dll version (TermSrvVerTxt) is absent from the on-disk
+  rdpwrap.ini, download RDPWrapOffsetFinder + Zydis from the sjackson0109 release
+  assets and run the finder to append the generated section to the INI.
+  This mirrors the approach used by sergiye/rdpWrapper (Wrapper.cs GenerateIniFile).
+────────────────────────────────────────────────────────────────────────────── }
+procedure TryAutoGenerateOffsets;
+const
+  BASE_URL = 'https://github.com/sjackson0109/rdpwrap/releases/latest/download/';
+var
+  TempDir, ExePath, DllPath, INIPath, ArchSuffix, SysCmd: String;
+begin
+  if TermSrvVerTxt = '' then Exit;
+
+  INIPath := ExtractFilePath(ExpandPath(WrapPath)) + 'rdpwrap.ini';
+
+  if INIHasSection(INIPath, TermSrvVerTxt) then
+  begin
+    Writeln('[+] Version ', TermSrvVerTxt, ' is covered in INI.');
+    Exit;
+  end;
+
+  Writeln('[!] Version ', TermSrvVerTxt, ' not found in INI.');
+  Writeln('[*] Attempting automatic offset generation via RDPWrapOffsetFinder...');
+
+  if Arch = 64 then ArchSuffix := '_x64' else ArchSuffix := '_x86';
+
+  TempDir := ExpandPath('%TEMP%') + '\rdpwrapoffset';
+  if not ForceDirectories(TempDir) and not DirectoryExists(TempDir) then
+  begin
+    Writeln('[-] Could not create temp directory. Skipping auto-generation.');
+    Exit;
+  end;
+
+  ExePath := TempDir + '\RDPWrapOffsetFinder.exe';
+  DllPath  := TempDir + '\Zydis.dll';
+
+  Writeln('[*] Downloading RDPWrapOffsetFinder', ArchSuffix, '.exe ...');
+  if not DownloadFileToDisk(BASE_URL + 'RDPWrapOffsetFinder' + ArchSuffix + '.exe', ExePath) then
+  begin
+    Writeln('[-] Download failed. The release asset may not yet be published.');
+    Writeln('[!] Run the publish-ini workflow on the sjackson0109/rdpwrap repository,');
+    Writeln('[!] then re-run this installer to enable auto-generation.');
+    Exit;
+  end;
+
+  Writeln('[*] Downloading Zydis', ArchSuffix, '.dll ...');
+  if not DownloadFileToDisk(BASE_URL + 'Zydis' + ArchSuffix + '.dll', DllPath) then
+  begin
+    Writeln('[-] Zydis download failed. Skipping auto-generation.');
+    DeleteFile(ExePath);
+    Exit;
+  end;
+
+  Writeln('[*] Running offset finder for termsrv.dll ', TermSrvVerTxt, ' ...');
+  { Run via cmd.exe so >> redirect to the INI file works correctly. }
+  SysCmd := ExpandPath('%SystemRoot%') + '\System32\cmd.exe';
+  ExecWait('"' + SysCmd + '" /c ""' + ExePath + '" >> "' + INIPath + '""');
+
+  if INIHasSection(INIPath, TermSrvVerTxt) then
+    Writeln('[+] Offsets generated successfully for version ', TermSrvVerTxt)
+  else
+    Writeln('[!] Offset finder ran but [', TermSrvVerTxt, '] was not added.',
+      ' Session may be limited or unstable for this build.');
+
+  { Clean up temporary tool files }
+  DeleteFile(ExePath);
+  DeleteFile(DllPath);
+  RemoveDirectory(PChar(TempDir));
+end;
+
 procedure CheckTermsrvVersion;
 var
   SuppLvl: Byte;
@@ -857,6 +992,7 @@ begin
   GetFileVersion(ExpandPath(TermServicePath), FV);
   VerTxt := Format('%d.%d.%d.%d',
   [FV.Version.w.Major, FV.Version.w.Minor, FV.Release, FV.Build]);
+  TermSrvVerTxt := VerTxt; // expose globally for TryAutoGenerateOffsets
   Writeln('[*] Terminal Services version: ', VerTxt);
 
   if (FV.Version.w.Major = 5) and (FV.Version.w.Minor = 1) then
@@ -1119,6 +1255,15 @@ begin
       end;
       Str.Free;
 
+      { After writing updated INI, fill any missing section for the running
+        termsrv.dll. FV/TermSrvVerTxt may not be set in the -w path, so
+        compute the version here before calling TryAutoGenerateOffsets. }
+      GetFileVersion(ExpandPath(TermServicePath), FV);
+      TermSrvVerTxt := Format('%d.%d.%d.%d',
+        [FV.Version.w.Major, FV.Version.w.Minor, FV.Release, FV.Build]);
+      Writeln('[*] Checking INI coverage for installed termsrv.dll version...');
+      TryAutoGenerateOffsets;
+
       SvcStart(TermService);
 
       Writeln('[+] Update completed.');
@@ -1207,6 +1352,9 @@ begin
     Writeln('[*] Extracting files...');
     Online := (ParamStr(2) = '-o') or (ParamStr(3) = '-o');
     ExtractFiles;
+
+    Writeln('[*] Checking INI coverage for installed termsrv.dll version...');
+    TryAutoGenerateOffsets;
 
     Writeln('[*] Configuring service library...');
     SetWrapperDll;

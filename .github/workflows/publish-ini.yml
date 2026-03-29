@@ -1,0 +1,137 @@
+name: Publish INI and Offset Finder Tools
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'res/rdpwrap.ini'
+      - '.github/workflows/publish-ini.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── Extract the date string used for tagging and the updated field ──────
+      - name: Get release metadata
+        id: meta
+        shell: pwsh
+        run: |
+          $date  = Get-Date -Format "yyyy.MM.dd.HHmm"
+          $stamp = Get-Date -Format "yyyy-MM-dd HH:mm UTC"
+
+          # Pull the Updated= line out of the INI to surface in release notes
+          $iniContent = Get-Content res/rdpwrap.ini -Raw
+          $iniDate    = if ($iniContent -match 'Updated=([^\r\n]+)') { $Matches[1] } else { 'unknown' }
+
+          echo "date=$date"       >> $env:GITHUB_OUTPUT
+          echo "stamp=$stamp"     >> $env:GITHUB_OUTPUT
+          echo "inidate=$iniDate" >> $env:GITHUB_OUTPUT
+
+      # ── Download the latest RDPWrapOffsetFinder release zip from llccd ──────
+      - name: Download RDPWrapOffsetFinder
+        id: finder
+        shell: pwsh
+        run: |
+          $zip = "RDPWrapOffsetFinder.zip"
+
+          # Resolve the real latest-release download URL via the GitHub API
+          $apiUrl  = "https://api.github.com/repos/llccd/RDPWrapOffsetFinder/releases/latest"
+          $release = Invoke-RestMethod -Uri $apiUrl -Headers @{ "User-Agent" = "rdpwrap-ci" }
+          $asset   = $release.assets | Where-Object { $_.name -like "*.zip" } | Select-Object -First 1
+          if (-not $asset) { throw "No zip asset found in latest RDPWrapOffsetFinder release" }
+
+          Write-Host "Downloading $($asset.browser_download_url)"
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip
+
+          # Expand the archive
+          Expand-Archive -Path $zip -DestinationPath .\finder -Force
+
+          # Diagnostic: show what we got
+          Write-Host "Zip contents:"
+          Get-ChildItem -Recurse .\finder | Select-Object FullName
+
+          # Helper: find a file by name pattern, preferring arch-specific subdirs
+          function Find-Binary($pattern, $archHint) {
+            $hits = Get-ChildItem -Recurse -Filter $pattern .\finder
+            # prefer paths that contain the arch hint
+            $match = $hits | Where-Object { $_.FullName -match $archHint } | Select-Object -First 1
+            if (-not $match) { $match = $hits | Select-Object -First 1 }
+            return $match
+          }
+
+          $x64exe = Find-Binary "RDPWrapOffsetFinder*.exe" "x64"
+          $x86exe = Find-Binary "RDPWrapOffsetFinder*.exe" "x86|Win32|32"
+          $x64dll = Find-Binary "Zydis*.dll"               "x64"
+          $x86dll = Find-Binary "Zydis*.dll"               "x86|Win32|32"
+
+          # If only one exe/dll variant exists, use it for both architectures
+          if (-not $x86exe) { $x86exe = $x64exe }
+          if (-not $x86dll) { $x86dll = $x64dll }
+          if (-not $x64exe) { throw "Could not locate RDPWrapOffsetFinder exe in zip" }
+          if (-not $x64dll) { throw "Could not locate Zydis dll in zip" }
+
+          Copy-Item $x64exe.FullName .\RDPWrapOffsetFinder_x64.exe
+          Copy-Item $x86exe.FullName .\RDPWrapOffsetFinder_x86.exe
+          Copy-Item $x64dll.FullName .\Zydis_x64.dll
+          Copy-Item $x86dll.FullName .\Zydis_x86.dll
+
+          Write-Host "Staged binaries:"
+          Get-ChildItem .\RDPWrapOffsetFinder_*.exe, .\Zydis_*.dll |
+            Format-Table Name, Length
+
+          echo "finder_ver=$($release.tag_name)" >> $env:GITHUB_OUTPUT
+
+      # ── Validate the INI has required sections ───────────────────────────────
+      - name: Validate INI
+        shell: pwsh
+        run: |
+          $ini = Get-Content res/rdpwrap.ini -Raw
+          foreach ($section in @('[Main]', '[SLPolicy]', '[PatchCodes]')) {
+            if ($ini -notmatch [regex]::Escape($section)) {
+              throw "INI validation failed: missing required section $section"
+            }
+          }
+          $sectionCount = ([regex]::Matches($ini, '^\[[\d\.]+\]', 'Multiline')).Count
+          Write-Host "INI is valid. Windows-version sections: $sectionCount"
+
+      # ── Create/update a versioned GitHub Release with all assets ─────────────
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "ini-${{ steps.meta.outputs.date }}"
+          name: "INI Update ${{ steps.meta.outputs.date }}"
+          make_latest: true
+          body: |
+            ## RDP Wrapper — Automated INI Release
+
+            | Field | Value |
+            |---|---|
+            | INI `Updated` date | `${{ steps.meta.outputs.inidate }}` |
+            | Published | ${{ steps.meta.outputs.stamp }} |
+            | RDPWrapOffsetFinder | ${{ steps.finder.outputs.finder_ver }} |
+
+            ### Assets
+            | File | Purpose |
+            |---|---|
+            | `rdpwrap.ini` | Latest offset database for all known termsrv.dll versions |
+            | `RDPWrapOffsetFinder_x64.exe` | Auto-generates offsets for unknown x64 Windows builds |
+            | `RDPWrapOffsetFinder_x86.exe` | Auto-generates offsets for unknown x86 Windows builds |
+            | `Zydis_x64.dll` / `Zydis_x86.dll` | Required runtime for the offset finder |
+
+            The installer fetches `rdpwrap.ini` from this release automatically.
+            If your termsrv.dll version is not in the INI, the installer downloads the
+            offset finder tools and generates the missing section on-the-fly.
+          files: |
+            res/rdpwrap.ini
+            RDPWrapOffsetFinder_x64.exe
+            RDPWrapOffsetFinder_x86.exe
+            Zydis_x64.dll
+            Zydis_x86.dll
