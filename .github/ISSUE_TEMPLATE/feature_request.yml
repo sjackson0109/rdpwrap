@@ -1,0 +1,41 @@
+name: Feature Request
+description: Suggest an improvement or new capability.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or motivation
+      description: What problem does this feature solve? Who is affected?
+      placeholder: "At the moment there is no way to ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: Describe the behaviour or change you would like to see.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any other approaches you have thought about (optional).
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component this relates to
+      options:
+        - rdpwrap.dll (C++ wrapper library)
+        - RDPWInst / installer (Delphi)
+        - rdpWrapper GUI (sergiye C# app)
+        - rdpwrap.ini (offset database)
+        - CI/CD pipelines
+        - Documentation
+        - Other
+    validations:
+      required: true

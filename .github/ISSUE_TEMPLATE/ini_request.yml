@@ -1,0 +1,71 @@
+name: INI Update Request — New Windows Build
+description: Your termsrv.dll version is not in the INI database and auto-generation failed.
+labels: [ini-update]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template when RDPConf shows **Not supported (red)** and the automatic
+        offset-generation step in the installer could not resolve your build.
+
+        If you have the technical skills, please consider following
+        [HOW-TO-ADD-NEW-WINDOWS-BUILDS.md](../docs/HOW-TO-ADD-NEW-WINDOWS-BUILDS.md)
+        and submitting a pull request instead.
+
+  - type: input
+    id: termsrv_version
+    attributes:
+      label: termsrv.dll version
+      description: "Run: (Get-Item C:\\Windows\\System32\\termsrv.dll).VersionInfo.FileVersion"
+      placeholder: "10.0.26100.3915"
+    validations:
+      required: true
+
+  - type: input
+    id: windows_version
+    attributes:
+      label: Windows version string
+      description: "Run: winver — paste the full string"
+      placeholder: "Windows 11 Version 24H2 (OS Build 26100.3915)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: architecture
+    attributes:
+      label: System architecture
+      options:
+        - x64 (64-bit)
+        - x86 (32-bit)
+        - ARM64
+    validations:
+      required: true
+
+  - type: dropdown
+    id: auto_gen
+    attributes:
+      label: Did the auto-generation step run?
+      description: The installer prints a message about TryAutoGenerateOffsets during install or update.
+      options:
+        - "Yes — it ran but failed with an error"
+        - "Yes — it ran and reported success, but wrapper still shows Not supported"
+        - "No — it was skipped or I installed offline"
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: auto_gen_output
+    attributes:
+      label: Auto-generation output (if any)
+      description: Paste the console output from the installer relating to offset generation.
+      render: text
+
+  - type: textarea
+    id: ini_section
+    attributes:
+      label: Generated INI section (if available)
+      description: |
+        If you ran RDPWrapOffsetFinder manually, paste the output here.
+        Run: .\RDPWrapOffsetFinder.exe C:\Windows\System32\termsrv.dll
+      render: ini

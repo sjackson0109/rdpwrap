@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Existing INI offset database
+    url: https://github.com/sjackson0109/rdpwrap/releases/latest
+    about: Check whether your Windows build is already covered before opening an INI request.
+  - name: Original project (stascorp, archived)
+    url: https://github.com/stascorp/rdpwrap
+    about: Historical reference only — no longer maintained.
+  - name: sergiye/rdpWrapper (C# rewrite)
+    url: https://github.com/sergiye/rdpWrapper
+    about: Alternative C# implementation with auto-offset generation.
