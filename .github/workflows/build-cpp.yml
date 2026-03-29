@@ -1,0 +1,89 @@
+name: Build C++ DLL
+
+# Trigger on version tags (e.g. v1.7.0) or manually
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  # ── Build x64 and Win32 release DLLs ─────────────────────────────────────────
+  build:
+    runs-on: windows-2022
+    strategy:
+      matrix:
+        platform: [x64, Win32]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      # Override the v120 platform toolset with the VS 2022 toolset (v143).
+      # The rdpwrap C++ source is standard Win32 API code and compiles cleanly
+      # with any modern MSVC version.
+      - name: Build rdpwrap.dll (${{ matrix.platform }})
+        working-directory: src-x86-x64-Fusix
+        run: |
+          msbuild RDPWrap.vcxproj `
+            /p:Configuration=Release `
+            /p:Platform="${{ matrix.platform }}" `
+            /p:PlatformToolset=v143 `
+            /p:WindowsTargetPlatformVersion=10.0
+
+      - name: Upload ${{ matrix.platform }} artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rdpwrap-dll-${{ matrix.platform }}
+          path: src-x86-x64-Fusix/${{ matrix.platform }}/Release/rdpwrap.dll
+          if-no-files-found: error
+
+  # ── Assemble a GitHub Release from both DLL artifacts ────────────────────────
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - name: Download x64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: rdpwrap-dll-x64
+          path: ./dist/x64
+
+      - name: Download Win32 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: rdpwrap-dll-Win32
+          path: ./dist/x86
+
+      - name: Rename DLLs for release
+        run: |
+          mv dist/x64/rdpwrap.dll dist/rdpwrap_x64.dll
+          mv dist/x86/rdpwrap.dll dist/rdpwrap_x86.dll
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          make_latest: false
+          body: |
+            ## RDP Wrapper DLL – ${{ github.ref_name }}
+
+            Built from `src-x86-x64-Fusix/` with MSVC v143 (VS 2022).
+
+            | File | Architecture |
+            |---|---|
+            | `rdpwrap_x64.dll` | x86-64 (64-bit Windows) |
+            | `rdpwrap_x86.dll` | x86 (32-bit Windows) |
+
+            > Place the appropriate DLL in `C:\Program Files\RDP Wrapper\rdpwrap.dll`
+            > and run `RDPWInst.exe -i` to install.
+          files: |
+            dist/rdpwrap_x64.dll
+            dist/rdpwrap_x86.dll

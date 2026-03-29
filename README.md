@@ -1,11 +1,15 @@
-# RDP Wrapper Library by Stas'M
+# RDP Wrapper Library
+
+> **Maintained fork** by [@sjackson0109](https://github.com/sjackson0109) — based on the original work by [Stas'M / binarymaster](https://github.com/stascorp/rdpwrap).
 
 [![Telegram](https://img.shields.io/badge/chat-Telegram-blue.svg)](https://t.me/rdpwrap)
-![Environment](https://img.shields.io/badge/Windows-Vista,%207,%208,%2010-brightgreen.svg)
-[![Release](https://img.shields.io/github/release/stascorp/rdpwrap.svg)](https://github.com/stascorp/rdpwrap/releases)
-![License](https://img.shields.io/github/license/stascorp/rdpwrap.svg)
-![Downloads](https://img.shields.io/github/downloads/stascorp/rdpwrap/latest/total.svg)
-![TotalDownloads](https://img.shields.io/github/downloads/stascorp/rdpwrap/total.svg)
+![Environment](https://img.shields.io/badge/Windows-Vista%20through%2011-brightgreen.svg)
+[![Release](https://img.shields.io/github/release/sjackson0109/rdpwrap.svg)](https://github.com/sjackson0109/rdpwrap/releases)
+[![INI publish](https://github.com/sjackson0109/rdpwrap/actions/workflows/publish-ini.yml/badge.svg)](https://github.com/sjackson0109/rdpwrap/actions/workflows/publish-ini.yml)
+[![Build C++ DLL](https://github.com/sjackson0109/rdpwrap/actions/workflows/build-cpp.yml/badge.svg)](https://github.com/sjackson0109/rdpwrap/actions/workflows/build-cpp.yml)
+![License](https://img.shields.io/github/license/sjackson0109/rdpwrap.svg)
+![Downloads](https://img.shields.io/github/downloads/sjackson0109/rdpwrap/latest/total.svg)
+![TotalDownloads](https://img.shields.io/github/downloads/sjackson0109/rdpwrap/total.svg)
 
 The goal of this project is to enable Remote Desktop Host support and concurrent RDP sessions on reduced functionality systems for home usage.
 
@@ -64,21 +68,30 @@ It's recommended to have original termsrv.dll file with the RDP Wrapper installa
 - Windows 2000, XP and Server 2003 will not be supported
 
 ### Key features:
-- RDP host server on any Windows edition beginning from Vista
+- RDP host server on any Windows edition beginning from Vista through Windows 11
 - Console and remote sessions at the same time
 - Using the same user simultaneously for local and remote logon (see configuration app)
 - Up to [15 concurrent sessions](https://github.com/stascorp/rdpwrap/issues/192) (the actual limitation depends on your hardware and OS version)
 - Console and RDP session shadowing (using [Task Manager in Windows 7](http://cdn.freshdesk.com/data/helpdesk/attachments/production/1009641577/original/remote_control.png?1413476051) and lower, and [Remote Desktop Connection in Windows 8](http://woshub.com/rds-shadow-how-to-connect-to-a-user-session-in-windows-server-2012-r2/) and higher)
 - Full [multi-monitor support](https://github.com/stascorp/rdpwrap/issues/163) for RDP host
-- ...and if you find a new feature not listed here, [tell us](https://github.com/stascorp/rdpwrap/issues/new) ;)
+- **Automatic INI updates** — the installer fetches the latest `rdpwrap.ini` directly from [GitHub Releases](https://github.com/sjackson0109/rdpwrap/releases/latest), published automatically by CI/CD on every change
+- **Auto-generation of offsets for unknown builds** — if your `termsrv.dll` version is not yet in the INI, the installer downloads [RDPWrapOffsetFinder](https://github.com/llccd/RDPWrapOffsetFinder) and generates the missing section on-the-fly (inspired by [sergiye/rdpWrapper](https://github.com/sergiye/rdpWrapper))
+- ...and if you find a new feature not listed here, [tell us](https://github.com/sjackson0109/rdpwrap/issues/new) ;)
 
 ### Porting to other platforms:
 - **ARM** for Windows RT (see links below)
 - **IA-64** for Itanium-based Windows Server? *Well, I have no idea* :)
 
 ### Building the binaries:
-- **x86 Delphi version** can be built with *Embarcadero RAD Studio 2010*
-- **x86/x64 C++ version** can be built with *Microsoft Visual Studio 2013*
+- **x86 Delphi version** (installer, config tool, checker) — requires *Embarcadero RAD Studio 2010* or later; no automated CI yet
+- **x86/x64 C++ version** (`rdpwrap.dll`) — can be built locally with *Visual Studio 2013+*, or automatically via the [Build C++ DLL](.github/workflows/build-cpp.yml) GitHub Actions workflow (uses MSVC v143 / VS 2022) by pushing a `v*` tag
+
+### CI/CD Pipelines:
+
+| Workflow | Trigger | Output |
+|---|---|---|
+| [publish-ini.yml](.github/workflows/publish-ini.yml) | Push to `main`/`master` touching `res/rdpwrap.ini`, or manual | GitHub Release with `rdpwrap.ini`, `RDPWrapOffsetFinder_x64/x86.exe`, `Zydis_x64/x86.dll` |
+| [build-cpp.yml](.github/workflows/build-cpp.yml) | Version tag push (`v*`) | GitHub Release with `rdpwrap_x64.dll` and `rdpwrap_x86.dll` |
 
 [andrewblock]:   http://web.archive.org/web/20150810054558/http://andrewblock.net/enable-remote-desktop-on-windows-8-core/
 [mydigitallife]: http://forums.mydigitallife.info/threads/55935-RDP-Wrapper-Library-(works-with-Windows-8-1-Basic)
@@ -87,8 +100,14 @@ It's recommended to have original termsrv.dll file with the RDP Wrapper installa
 [yt-offsets]:    http://www.youtube.com/watch?v=FiD86tmRBtk
 
 ### Links:
-- Official GitHub repository:
+- **This fork (maintained):**
+<br>https://github.com/sjackson0109/rdpwrap/
+- Original upstream repository (archived / unmaintained):
 <br>https://github.com/stascorp/rdpwrap/
+- Inspiration for auto-offset generation:
+<br>[sergiye/rdpWrapper](https://github.com/sergiye/rdpWrapper)
+- Offset finder tool used for auto-generation:
+<br>[llccd/RDPWrapOffsetFinder](https://github.com/llccd/RDPWrapOffsetFinder)
 - Official Telegram chat:
 <br>https://t.me/rdpwrap
 - Active discussion in the comments here:
@@ -119,7 +138,7 @@ It's recommended to have original termsrv.dll file with the RDP Wrapper installa
 
 > Where can I download the installer or binaries?
 
-In the [GitHub Releases](https://github.com/stascorp/rdpwrap/releases) section.
+In the [GitHub Releases](https://github.com/sjackson0109/rdpwrap/releases) section.
 
 > Is it legal to use this application?
 
@@ -131,7 +150,7 @@ Yes, it works in online mode by default. You may disable it by removing `-o` fla
 
 > What is online install mode?
 
-Online install mode introduced in version 1.6.1. When you installing RDP Wrapper first time using this mode, it will download [latest INI file](https://github.com/stascorp/rdpwrap/blob/master/res/rdpwrap.ini) from GitHub. See [this discussion](https://github.com/stascorp/rdpwrap/issues/132).
+Online install mode was introduced in version 1.6.1. When installing for the first time using this mode, the installer downloads the [latest `rdpwrap.ini`](https://github.com/sjackson0109/rdpwrap/releases/latest/download/rdpwrap.ini) from this repository's GitHub Releases — published automatically by CI/CD whenever `res/rdpwrap.ini` is updated. If your `termsrv.dll` version is not yet listed in the downloaded INI, the installer will additionally download [RDPWrapOffsetFinder](https://github.com/llccd/RDPWrapOffsetFinder) and attempt to auto-generate the missing offsets on the spot.
 
 > What is INI file and why we need it?
 
@@ -143,11 +162,11 @@ Beginning with version 1.5 the `rdpwrap.dll` is not updated anymore, since all s
 
 > Config Tool shows `[not supported]` and RDP doesn't work. What can I do?
 
-Make sure you're connected to the Internet and run `update.bat`.
+Make sure you're connected to the Internet and run `update.bat`. This will download the latest INI from GitHub Releases and, if your `termsrv.dll` version is still missing, will automatically run [RDPWrapOffsetFinder](https://github.com/llccd/RDPWrapOffsetFinder) to generate offsets for your specific build.
 
 > Update doesn't help, it still shows `[not supported]`.
 
-Visit [issues](https://github.com/stascorp/rdpwrap/issues) section, and check whether your `termsrv.dll` build is listed here. If you can't find such issue, create a new — specify your build version for adding to support.
+Check the [issues](https://github.com/sjackson0109/rdpwrap/issues) section to see if your `termsrv.dll` build is mentioned. If not, please open a new issue with your exact build version (shown by the Config Tool). You can also run `RDPWInst.exe -w` from an Administrator command prompt to see the full output of the update and auto-generation steps.
 
 > Why `RDPCheck` doesn't allow to change resolution and other settings?
 
@@ -167,6 +186,14 @@ Visit [issues](https://github.com/stascorp/rdpwrap/issues) section, and check wh
 ---
 
 ### Change log:
+
+#### 2026.03.29
+- Fork maintained by [@sjackson0109](https://github.com/sjackson0109)
+- INI source redirected from unmaintained stascorp upstream to this repository's GitHub Releases
+- **CI/CD pipeline added** — [`publish-ini.yml`](.github/workflows/publish-ini.yml) publishes `rdpwrap.ini` and the `RDPWrapOffsetFinder` tools as release assets on every INI change
+- **CI/CD pipeline added** — [`build-cpp.yml`](.github/workflows/build-cpp.yml) builds `rdpwrap_x64.dll` / `rdpwrap_x86.dll` via MSVC v143 (VS 2022) on version tag push
+- **Auto-offset generation** added to `RDPWInst.dpr` — on install (`-i`) and update (`-w`), if the running `termsrv.dll` version is absent from the INI the installer downloads `RDPWrapOffsetFinder` from release assets and appends the generated `[x.x.xxxxx.xxxxx]` section automatically; inspired by [sergiye/rdpWrapper](https://github.com/sergiye/rdpWrapper)
+- New installer helpers: `DownloadFileToDisk`, `INIHasSection`, `TryAutoGenerateOffsets`
 
 #### 2017.12.27
 - Version 1.6.2
