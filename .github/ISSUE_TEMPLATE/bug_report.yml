@@ -1,0 +1,88 @@
+name: Bug Report
+description: RDP Wrapper is not working correctly on your machine.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before submitting, please confirm:
+        - You are running the latest release from https://github.com/sjackson0109/rdpwrap/releases/latest
+        - Your termsrv.dll version is listed in `rdpwrap.ini` (check RDPConf for the status colour)
+        - You have excluded `C:\Program Files\RDP Wrapper\` from your antivirus
+
+  - type: dropdown
+    id: status
+    attributes:
+      label: RDPConf status
+      description: What colour/status does RDPConf show?
+      options:
+        - Fully supported (green) — but RDP still fails
+        - Partially supported (yellow)
+        - Not supported (red)
+        - Not installed
+        - Wrapper DLL not found
+    validations:
+      required: true
+
+  - type: input
+    id: windows_version
+    attributes:
+      label: Windows version
+      description: "Run: winver — paste the full string e.g. Windows 11 Version 24H2 (OS Build 26100.xxxx)"
+      placeholder: "Windows 11 Version 24H2 (OS Build 26100.3915)"
+    validations:
+      required: true
+
+  - type: input
+    id: termsrv_version
+    attributes:
+      label: termsrv.dll version
+      description: "Run: (Get-Item C:\\Windows\\System32\\termsrv.dll).VersionInfo.FileVersion"
+      placeholder: "10.0.26100.3915"
+    validations:
+      required: true
+
+  - type: input
+    id: rdpwrap_version
+    attributes:
+      label: RDP Wrapper version
+      description: Version shown in RDPConf or the release tag you downloaded.
+      placeholder: "ini-2026.03.29.1400"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: architecture
+    attributes:
+      label: System architecture
+      options:
+        - x64 (64-bit)
+        - x86 (32-bit)
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the problem
+      description: What happens? What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Run install.bat as administrator
+        2. Open RDPConf
+        3. Status shows ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: Paste any output from the install/update bat scripts or Event Viewer (optional).
+      render: text
