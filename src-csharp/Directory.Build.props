@@ -1,0 +1,15 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Platforms>x86;x64</Platforms>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <PlatformTarget>$(Platform)</PlatformTarget>
+    <!-- Ensure single-file publish works -->
+    <SelfContained>false</SelfContained>
+    <!-- Reproducible builds -->
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+</Project>

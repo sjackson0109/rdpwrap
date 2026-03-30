@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>RDPWInst</RootNamespace>
+    <AssemblyName>RDPWInst</AssemblyName>
+    <!-- Embed binary payloads -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RDPWrap.Common\RDPWrap.Common.csproj" />
+  </ItemGroup>
+
+  <!-- Embedded payload resources (DLLs, rdpwrap.ini) go here once binaries are available -->
+  <!-- Example:
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\rdpw32.dll" />
+    <EmbeddedResource Include="Resources\rdpw64.dll" />
+    <EmbeddedResource Include="Resources\rdpwrap.ini" />
+  </ItemGroup>
+  -->
+</Project>

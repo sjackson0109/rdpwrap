@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <UseWindowsForms>true</UseWindowsForms>
+    <RootNamespace>RDPCheck</RootNamespace>
+    <AssemblyName>RDPCheck</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RDPWrap.Common\RDPWrap.Common.csproj" />
+  </ItemGroup>
+
+  <!-- COM interop for AxMsRdpClient2 — generated via:
+       tlbimp %SystemRoot%\System32\mstscax.dll /out:MSTSCLib.dll
+       Then reference it here:
+  <ItemGroup>
+    <Reference Include="MSTSCLib">
+      <HintPath>Interop\MSTSCLib.dll</HintPath>
+    </Reference>
+    <Reference Include="AxInterop.MSTSCLib">
+      <HintPath>Interop\AxInterop.MSTSCLib.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  -->
+</Project>
