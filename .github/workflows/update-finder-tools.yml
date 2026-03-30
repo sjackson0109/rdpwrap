@@ -43,28 +43,31 @@ jobs:
           $asset = $release.assets | Where-Object { $_.name -like "*.zip" } | Select-Object -First 1
           if (-not $asset) { throw "No zip asset found in release $version" }
 
-          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile finder.zip
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile finder.zip -UseBasicParsing
           Expand-Archive -Path finder.zip -DestinationPath .\finder -Force
 
           Write-Host "Zip contents:"
-          Get-ChildItem -Recurse .\finder | Select-Object FullName
+          Get-ChildItem -Recurse .\finder | Select-Object FullName, Length
 
-          function Get-Bin($pattern, $hint) {
-            $hits = Get-ChildItem -Recurse -Filter $pattern .\finder
-            $m = $hits | Where-Object { $_.FullName -match $hint } | Select-Object -First 1
-            if (-not $m) { $m = $hits | Select-Object -First 1 }
-            return $m
+          # The llccd zip uses "64bit/" and "32bit/" subfolder names.
+          # We pick the symbol-enabled exe (not the _nosymbol variant) from each arch folder.
+          function Get-Bin($filter, $archHint) {
+            $hits = Get-ChildItem -Recurse .\finder -Filter $filter |
+                    Where-Object { $_.FullName -match $archHint } |
+                    Where-Object { $_.Name -notmatch "nosymbol" }
+            return ($hits | Select-Object -First 1)
           }
 
-          $x64exe = Get-Bin "RDPWrapOffsetFinder*.exe" "x64"
-          $x86exe = Get-Bin "RDPWrapOffsetFinder*.exe" "x86|Win32|32"
-          $x64dll = Get-Bin "Zydis*.dll"               "x64"
-          $x86dll = Get-Bin "Zydis*.dll"               "x86|Win32|32"
+          $x64exe = Get-Bin "RDPWrapOffsetFinder*.exe" "64bit"
+          $x64dll = Get-Bin "Zydis*.dll"               "64bit"
+          $x86exe = Get-Bin "RDPWrapOffsetFinder*.exe" "32bit"
+          $x86dll = Get-Bin "Zydis*.dll"               "32bit"
 
+          # Fall back to x64 if the release only ships one arch
           if (-not $x86exe) { $x86exe = $x64exe }
           if (-not $x86dll) { $x86dll = $x64dll }
-          if (-not $x64exe) { throw "Could not locate exe" }
-          if (-not $x64dll) { throw "Could not locate dll" }
+          if (-not $x64exe) { throw "Could not locate x64 exe" }
+          if (-not $x64dll) { throw "Could not locate x64 Zydis.dll" }
 
           New-Item -ItemType Directory -Path tools\RDPWrapOffsetFinder\x64 -Force | Out-Null
           New-Item -ItemType Directory -Path tools\RDPWrapOffsetFinder\x86 -Force | Out-Null
@@ -81,6 +84,7 @@ jobs:
           echo "version=$version" >> $env:GITHUB_OUTPUT
 
       - name: Commit and push to a new branch
+        id: push
         shell: pwsh
         run: |
           $version = "${{ steps.fetch.outputs.version }}"
@@ -90,11 +94,13 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout -b $branch
           git add tools/RDPWrapOffsetFinder
-          git diff --cached --quiet && { Write-Host "No changes - tools already up to date"; exit 0 }
+          if ((git diff --cached --name-only) -eq "") {
+            Write-Host "No changes - tools already up to date"
+            exit 0
+          }
           git commit -m "chore: update RDPWrapOffsetFinder tools to $version"
           git push origin $branch
           echo "branch=$branch" >> $env:GITHUB_OUTPUT
-        id: push
 
       - name: Create pull request
         if: steps.push.outputs.branch != ''
@@ -104,7 +110,10 @@ jobs:
           $branch  = "${{ steps.push.outputs.branch }}"
           gh pr create `
             --title "chore: update RDPWrapOffsetFinder tools to $version" `
-            --body "Automated update of the committed RDPWrapOffsetFinder binaries in ``tools/RDPWrapOffsetFinder/`` to upstream release $version.`` Triggered manually via the Update RDPWrapOffsetFinder tools workflow.`` Merge to include the updated binaries in the next INI release." `
+            --body "Automated update of the committed RDPWrapOffsetFinder binaries in ``tools/RDPWrapOffsetFinder/`` to upstream release $version.
+
+Triggered manually via the **Update RDPWrapOffsetFinder tools** workflow.
+Merge to include the updated binaries in the next INI release." `
             --base master `
             --head $branch
         env:
