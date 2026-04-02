@@ -7,8 +7,6 @@
 on:
   pull_request:
     branches: [main, master]
-    paths:
-      - 'src-x86-x64-Fusix/**'
   push:
     tags:
       - 'v*'

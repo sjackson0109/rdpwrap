@@ -7,8 +7,6 @@
 on:
   pull_request:
     branches: [main, master]
-    paths:
-      - 'src-csharp/RDPOffsetFinder/**'
   push:
     tags:
       - 'v*'
@@ -28,13 +26,15 @@ jobs:
       matrix:
         include:
           - platform: x64
+            sln_platform: x64
             zydis_cfg: "Release MD DLL"
             zydis_bin: ReleaseX64
-            finder_plat: x64
+            out_dir: x64/Release
           - platform: Win32
+            sln_platform: x86
             zydis_cfg: "Release MD DLL"
             zydis_bin: ReleaseX86
-            finder_plat: Win32
+            out_dir: Release
 
     steps:
       - name: Checkout repository (with submodules)
@@ -55,13 +55,16 @@ jobs:
             /p:PlatformToolset=v143 `
             /v:minimal
 
-      # Build the offset finder (links against the Zydis import lib just produced)
+      # Build via .sln so $(SolutionDir) resolves to the submodule root where
+      # AdditionalIncludeDirectories and AdditionalDependencies reference zydis/
+      # NB: the solution uses x86/x64 platform names (not Win32) - use sln_platform.
       - name: Build RDPWrapOffsetFinder (${{ matrix.platform }})
         working-directory: src-csharp/RDPOffsetFinder
         run: |
-          msbuild RDPWrapOffsetFinder\RDPWrapOffsetFinder.vcxproj `
+          msbuild RDPWrapOffsetFinder.sln `
+            /t:RDPWrapOffsetFinder `
             /p:Configuration=Release `
-            /p:Platform="${{ matrix.platform }}" `
+            /p:Platform="${{ matrix.sln_platform }}" `
             /p:PlatformToolset=v143 `
             /v:minimal
 
@@ -70,7 +73,8 @@ jobs:
         run: |
           $arch  = if ("${{ matrix.platform }}" -eq "Win32") { "x86" } else { "x64" }
           $root  = "src-csharp/RDPOffsetFinder"
-          $exe   = "$root/RDPWrapOffsetFinder/${{ matrix.finder_plat }}/Release/RDPWrapOffsetFinder.exe"
+          # Win32 OutDir = Release\ (no platform prefix); x64 OutDir = x64\Release\
+          $exe   = "$root/${{ matrix.out_dir }}/RDPWrapOffsetFinder.exe"
           $dll   = "$root/zydis/msvc/bin/${{ matrix.zydis_bin }}/Zydis.dll"
 
           Write-Host "Exe: $(Get-Item $exe | Select-Object -Exp Length) bytes"

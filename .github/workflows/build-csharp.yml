@@ -9,8 +9,6 @@ name: Build C# Tools
 on:
   pull_request:
     branches: [main, master]
-    paths:
-      - 'src-csharp/**'
   push:
     tags:
       - 'v*'
