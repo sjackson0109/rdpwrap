@@ -34,7 +34,7 @@ jobs:
             sln_platform: x86
             zydis_cfg: "Release MD DLL"
             zydis_bin: ReleaseX86
-            finder_plat: Win32
+            finder_plat: x86
 
     steps:
       - name: Checkout repository (with submodules)

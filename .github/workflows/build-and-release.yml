@@ -132,8 +132,9 @@ jobs:
               /v:minimal
 
             $arch   = $cfg.Arch
-            # .sln build outputs to SolutionDir/<Platform>/Release/ (not <ProjectDir>/<Platform>/Release/)
-            $exeSrc = "src-csharp/RDPOffsetFinder/$($cfg.Platform)/Release/RDPWrapOffsetFinder.exe"
+            # .sln build outputs to SolutionDir/<SlnPlatform>/Release/ where SlnPlatform is x86/x64
+            # (solution GlobalSection maps x86->Win32 internally, but $(Platform) seen by vcxproj is x86)
+            $exeSrc = "src-csharp/RDPOffsetFinder/$($cfg.SlnPlatform)/Release/RDPWrapOffsetFinder.exe"
             $dllSrc = "src-csharp/RDPOffsetFinder/zydis/msvc/bin/$($cfg.ZydisBin)/Zydis.dll"
             Copy-Item $exeSrc ".\RDPWrapOffsetFinder_$arch.exe"
             Copy-Item $dllSrc ".\Zydis_$arch.dll"
