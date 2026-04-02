@@ -29,12 +29,12 @@ jobs:
             sln_platform: x64
             zydis_cfg: "Release MD DLL"
             zydis_bin: ReleaseX64
-            finder_plat: x64
+            out_dir: x64/Release
           - platform: Win32
             sln_platform: x86
             zydis_cfg: "Release MD DLL"
             zydis_bin: ReleaseX86
-            finder_plat: x86
+            out_dir: Release
 
     steps:
       - name: Checkout repository (with submodules)
@@ -68,23 +68,13 @@ jobs:
             /p:PlatformToolset=v143 `
             /v:minimal
 
-      - name: Locate build outputs (diagnostic)
-        shell: pwsh
-        run: |
-          Write-Host "=== RDPWrapOffsetFinder.exe candidates ==="
-          Get-ChildItem -Recurse -Filter "RDPWrapOffsetFinder.exe" -Path "src-csharp/RDPOffsetFinder" -ErrorAction SilentlyContinue |
-            Select-Object FullName, Length | Format-Table -AutoSize
-          Write-Host "=== Directory tree (Release folders only) ==="
-          Get-ChildItem -Recurse -Directory -Filter "Release" -Path "src-csharp/RDPOffsetFinder" -ErrorAction SilentlyContinue |
-            Select-Object FullName | Format-Table -AutoSize
-
       - name: Collect outputs
         shell: pwsh
         run: |
           $arch  = if ("${{ matrix.platform }}" -eq "Win32") { "x86" } else { "x64" }
           $root  = "src-csharp/RDPOffsetFinder"
-          # .sln build outputs to SolutionDir/<Platform>/Release/ (not <ProjectDir>/<Platform>/Release/)
-          $exe   = "$root/${{ matrix.finder_plat }}/Release/RDPWrapOffsetFinder.exe"
+          # Win32 OutDir = Release\ (no platform prefix); x64 OutDir = x64\Release\
+          $exe   = "$root/${{ matrix.out_dir }}/RDPWrapOffsetFinder.exe"
           $dll   = "$root/zydis/msvc/bin/${{ matrix.zydis_bin }}/Zydis.dll"
 
           Write-Host "Exe: $(Get-Item $exe | Select-Object -Exp Length) bytes"

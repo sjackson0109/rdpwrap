@@ -109,8 +109,8 @@ jobs:
           Write-Host "Submodule version: $version"
 
           foreach ($cfg in @(
-            @{ Platform = 'x64';   SlnPlatform = 'x64'; ZydisCfg = 'Release MD DLL'; ZydisBin = 'ReleaseX64'; Arch = 'x64'  }
-            @{ Platform = 'Win32'; SlnPlatform = 'x86'; ZydisCfg = 'Release MD DLL'; ZydisBin = 'ReleaseX86'; Arch = 'x86'  }
+            @{ Platform = 'x64';   SlnPlatform = 'x64'; OutDir = 'x64/Release'; ZydisCfg = 'Release MD DLL'; ZydisBin = 'ReleaseX64'; Arch = 'x64'  }
+            @{ Platform = 'Win32'; SlnPlatform = 'x86'; OutDir = 'Release';     ZydisCfg = 'Release MD DLL'; ZydisBin = 'ReleaseX86'; Arch = 'x86'  }
           )) {
             # Build Zydis DLL
             msbuild src-csharp/RDPOffsetFinder/zydis/msvc/zydis/Zydis.vcxproj `
@@ -132,9 +132,8 @@ jobs:
               /v:minimal
 
             $arch   = $cfg.Arch
-            # .sln build outputs to SolutionDir/<SlnPlatform>/Release/ where SlnPlatform is x86/x64
-            # (solution GlobalSection maps x86->Win32 internally, but $(Platform) seen by vcxproj is x86)
-            $exeSrc = "src-csharp/RDPOffsetFinder/$($cfg.SlnPlatform)/Release/RDPWrapOffsetFinder.exe"
+            # Win32 OutDir = Release\ (no platform prefix); x64 OutDir = x64\Release\
+            $exeSrc = "src-csharp/RDPOffsetFinder/$($cfg.OutDir)/RDPWrapOffsetFinder.exe"
             $dllSrc = "src-csharp/RDPOffsetFinder/zydis/msvc/bin/$($cfg.ZydisBin)/Zydis.dll"
             Copy-Item $exeSrc ".\RDPWrapOffsetFinder_$arch.exe"
             Copy-Item $dllSrc ".\Zydis_$arch.dll"
