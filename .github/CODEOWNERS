@@ -1,0 +1,25 @@
+# CODEOWNERS
+# GitHub automatically requests a review from the listed owners whenever a PR
+# modifies files matching the pattern.  More specific rules override less specific
+# ones (last match wins), so list broad patterns first.
+#
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Catch-all: maintainer reviews everything
+*                                      @sjackson0109
+
+# C++ DLL source
+src-x86-x64-Fusix/                    @sjackson0109
+
+# C# tools (installer, configurator, checker, offset-finder)
+src-csharp/                            @sjackson0109
+
+# WiX MSI packaging
+msi/                                   @sjackson0109
+
+# CI/CD pipelines
+.github/                               @sjackson0109
+
+# Documentation
+docs/                                  @sjackson0109
+README.md                              @sjackson0109

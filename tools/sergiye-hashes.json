@@ -1,0 +1,18 @@
+{
+  "_comment": [
+    "This file pins the expected SHA-256 hashes of the rdpWrapper binaries downloaded",
+    "from https://github.com/sergiye/rdpWrapper/releases during the build-and-release.yml CI run.",
+    "",
+    "How to update after a new sergiye release:",
+    "  1. Download rdpWrapper_x64.exe and rdpWrapper_x86.exe from the release page.",
+    "  2. Run: Get-FileHash rdpWrapper_x64.exe -Algorithm SHA256",
+    "  3. Update the hashes and 'release' field below, then open a PR.",
+    "",
+    "If this file contains an empty 'release' string the verification step is SKIPPED",
+    "(bootstrap / first-run scenario). Set a real release tag once the first verified",
+    "download has been confirmed."
+  ],
+  "release": "2.10",
+  "rdpWrapper_x64.exe": "EAEE55CA7813E728177295770C52FBE6287DF7A49999426E0C71D916B3DF841F",
+  "rdpWrapper_x86.exe": "F59FE1DA29965F2FB001655C9F856BE5FD903BBCB7D92E807268C4D7B40D5AF8"
+}

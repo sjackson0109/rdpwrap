@@ -1,0 +1,127 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  RDP Wrapper — MSI installer definition (WiX v5 / schema v4)
+  Parameterised by MSBuild Platform: build once per arch.
+
+  Build via:
+    dotnet build msi/RDPWInst.wixproj -c Release /p:Platform=x64   /p:PackageVersion=yy.M.d
+    dotnet build msi/RDPWInst.wixproj -c Release /p:Platform=x86   /p:PackageVersion=yy.M.d
+    dotnet build msi/RDPWInst.wixproj -c Release /p:Platform=arm64 /p:PackageVersion=yy.M.d
+
+  Required inputs alongside this file (produced by CI / build-local.ps1):
+    RDPWInst_<arch>.exe   RDPConf_<arch>.exe   RDPCheck_<arch>.exe
+    rdpwrap_<arch>.dll
+    rdpwrap.ini  (shared — same file for all arches)
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+
+  <!--
+    $(var.Platform) is automatically set by WiX from the MSBuild Platform property.
+    x86 installs to Program Files (x86); x64/arm64 install to Program Files.
+  -->
+  <?if $(var.Platform) = "x64" ?>
+    <?define Arch            = "x64" ?>
+    <?define UpgradeCode     = "6623f60c-e84f-41e7-a55b-f42116500064" ?>
+    <?define ProgramFilesDir = "ProgramFiles6432Folder" ?>
+  <?elseif $(var.Platform) = "x86" ?>
+    <?define Arch            = "x86" ?>
+    <?define UpgradeCode     = "6623f60c-e84f-41e7-a55b-f42116500032" ?>
+    <?define ProgramFilesDir = "ProgramFilesFolder" ?>
+  <?else ?>
+    <?define Arch            = "arm64" ?>
+    <?define UpgradeCode     = "6623f60c-e84f-41e7-a55b-f4211650aa64" ?>
+    <?define ProgramFilesDir = "ProgramFiles6432Folder" ?>
+  <?endif ?>
+
+  <Package
+    Name="RDP Wrapper Library ($(var.Arch))"
+    Version="$(var.PackageVersion)"
+    Manufacturer="Simon Jackson (@sjackson0109)"
+    UpgradeCode="$(var.UpgradeCode)"
+    Scope="perMachine"
+    InstallerVersion="500"
+    Compressed="yes">
+
+    <!-- Allow upgrades, downgrades, and same-version reinstalls without blocking.
+         Schedule=afterInstallInitialize ensures the old product is fully removed
+         before new files are written, preventing component-ownership conflicts. -->
+    <MajorUpgrade
+      Schedule="afterInstallInitialize"
+      AllowDowngrades="yes"
+      IgnoreRemoveFailure="yes" />
+
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- ── Installation directory ─────────────────────────────────────────── -->
+    <StandardDirectory Id="$(var.ProgramFilesDir)">
+      <Directory Id="INSTALLFOLDER" Name="RDP Wrapper" />
+    </StandardDirectory>
+
+    <!-- ── Feature ────────────────────────────────────────────────────────── -->
+    <Feature Id="ProductFeature" Title="RDP Wrapper" Level="1">
+      <ComponentGroupRef Id="ProductComponents" />
+    </Feature>
+
+    <!-- ── Custom actions: run arch-native RDPWInst ──────────────────────── -->
+    <!--
+      -f (force): silently uninstalls any existing installation (bat- or
+      MSI-managed) before re-installing.  Prevents the "already installed"
+      error when upgrading from a previous MSI or a manual install.
+    -->
+    <CustomAction
+      Id="InstallWrap"
+      FileRef="RDPWInstExe"
+      ExeCommand="-i -o -f"
+      Execute="deferred"
+      Impersonate="no"
+      Return="check" />
+
+    <CustomAction
+      Id="UninstallWrap"
+      FileRef="RDPWInstExe"
+      ExeCommand="-u"
+      Execute="deferred"
+      Impersonate="no"
+      Return="check" />
+
+    <InstallExecuteSequence>
+      <!-- Run install wrapper after files land; skip only when THIS product is
+           being removed as the OLD side of an upgrade (UPGRADINGPRODUCTCODE set). -->
+      <Custom Action="InstallWrap"   After="InstallFiles"  Condition="NOT UPGRADINGPRODUCTCODE" />
+      <Custom Action="UninstallWrap" Before="RemoveFiles"  Condition="REMOVE AND NOT UPGRADINGPRODUCTCODE" />
+    </InstallExecuteSequence>
+  </Package>
+
+  <!-- ── Component group ─────────────────────────────────────────────────── -->
+  <Fragment>
+    <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
+
+      <!-- RDPWInst (installer / uninstaller tool) -->
+      <Component Id="RDPWInstExe_Comp" Guid="*">
+        <File Id="RDPWInstExe" Source="RDPWInst_$(var.Arch).exe" KeyPath="yes" />
+      </Component>
+
+      <!-- RDPConf (configuration GUI) -->
+      <Component Id="RDPConfExe_Comp" Guid="*">
+        <File Id="RDPConfExe" Source="RDPConf_$(var.Arch).exe" KeyPath="yes" />
+      </Component>
+
+      <!-- RDPCheck (RDP loopback tester) -->
+      <Component Id="RDPCheckExe_Comp" Guid="*">
+        <File Id="RDPCheckExe" Source="RDPCheck_$(var.Arch).exe" KeyPath="yes" />
+      </Component>
+
+      <!-- rdpwrap.dll (core DLL) -->
+      <Component Id="RdpwrapDll_Comp" Guid="*">
+        <File Source="rdpwrap_$(var.Arch).dll" KeyPath="yes" />
+      </Component>
+
+      <!-- rdpwrap.ini (offset database — same file for all arches) -->
+      <Component Id="RdpwrapIni_Comp" Guid="*">
+        <File Source="rdpwrap.ini" KeyPath="yes" />
+      </Component>
+
+    </ComponentGroup>
+  </Fragment>
+
+</Wix>

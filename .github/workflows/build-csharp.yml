@@ -1,0 +1,141 @@
+name: Build C# Tools
+
+# Trigger on:
+#   - PRs targeting main/master that touch C# source (compile check before merge)
+#   - Version tag pushes (e.g. v1.7.0)
+#   - Manual dispatch
+# Produces self-contained, single-file RDPWInst / RDPConf / RDPCheck
+# executables for x64 and x86.
+on:
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'src-csharp/**'
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+permissions:
+  contents: write
+
+jobs:
+  # ── Publish self-contained executables ────────────────────────────────────────
+  build:
+    runs-on: windows-2022
+    strategy:
+      matrix:
+        platform: [x64, x86, arm64]
+        include:
+          - platform: x64
+            rid: win-x64
+          - platform: x86
+            rid: win-x86
+          - platform: arm64
+            rid: win-arm64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/Directory.Build.props', '**/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - name: Publish RDPWInst (${{ matrix.platform }})
+        run: |
+          dotnet publish src-csharp/RDPWInst/RDPWInst.csproj `
+            -c Release `
+            -r ${{ matrix.rid }} `
+            -p:Platform=${{ matrix.platform }} `
+            -p:PublishSingleFile=true `
+            -p:SelfContained=false `
+            --output dist/${{ matrix.platform }}/RDPWInst
+
+      - name: Publish RDPConf (${{ matrix.platform }})
+        run: |
+          dotnet publish src-csharp/RDPConf/RDPConf.csproj `
+            -c Release `
+            -r ${{ matrix.rid }} `
+            -p:Platform=${{ matrix.platform }} `
+            -p:PublishSingleFile=true `
+            -p:SelfContained=false `
+            --output dist/${{ matrix.platform }}/RDPConf
+
+      - name: Publish RDPCheck (${{ matrix.platform }})
+        run: |
+          dotnet publish src-csharp/RDPCheck/RDPCheck.csproj `
+            -c Release `
+            -r ${{ matrix.rid }} `
+            -p:Platform=${{ matrix.platform }} `
+            -p:PublishSingleFile=true `
+            -p:SelfContained=false `
+            --output dist/${{ matrix.platform }}/RDPCheck
+
+      # ── Optional: code-sign all three executables ─────────────────────────────
+      # Enable by setting repository variable USE_CERT_SIGNING=true and adding
+      # secrets CODESIGN_CERT_BASE64 (PFX as base64) and CODESIGN_CERT_PASSWORD.
+      - name: Sign executables (${{ matrix.platform }})
+        if: vars.USE_CERT_SIGNING == 'true'
+        env:
+          CODESIGN_CERT_BASE64: ${{ secrets.CODESIGN_CERT_BASE64 }}
+          CODESIGN_CERT_PASSWORD: ${{ secrets.CODESIGN_CERT_PASSWORD }}
+        shell: pwsh
+        run: |
+          $pfxPath = "$env:RUNNER_TEMP\codesign.pfx"
+          [IO.File]::WriteAllBytes($pfxPath,
+            [Convert]::FromBase64String($env:CODESIGN_CERT_BASE64))
+
+          $exes = @(
+            "dist\${{ matrix.platform }}\RDPWInst\RDPWInst.exe",
+            "dist\${{ matrix.platform }}\RDPConf\RDPConf.exe",
+            "dist\${{ matrix.platform }}\RDPCheck\RDPCheck.exe"
+          )
+
+          $signtool = (Resolve-Path "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" |
+                       Sort-Object | Select-Object -Last 1).Path
+          foreach ($exe in $exes) {
+            & $signtool sign `
+              /fd SHA256 `
+              /f $pfxPath `
+              /p $env:CODESIGN_CERT_PASSWORD `
+              /tr http://timestamp.digicert.com `
+              /td SHA256 `
+              $exe
+          }
+          Remove-Item $pfxPath -Force
+
+      - name: Collect artifacts (${{ matrix.platform }})
+        run: |
+          Copy-Item dist/${{ matrix.platform }}/RDPWInst/RDPWInst.exe  RDPWInst_${{ matrix.platform }}.exe
+          Copy-Item dist/${{ matrix.platform }}/RDPConf/RDPConf.exe    RDPConf_${{ matrix.platform }}.exe
+          Copy-Item dist/${{ matrix.platform }}/RDPCheck/RDPCheck.exe  RDPCheck_${{ matrix.platform }}.exe
+
+      - name: Upload ${{ matrix.platform }} artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: csharp-tools-${{ matrix.platform }}
+          path: |
+            RDPWInst_${{ matrix.platform }}.exe
+            RDPConf_${{ matrix.platform }}.exe
+            RDPCheck_${{ matrix.platform }}.exe
+          if-no-files-found: error
+
+  # NOTE: Full GitHub Releases (including C# tools) are published by publish-ini.yml.
+  # This workflow intentionally stops at the artifact upload step so that partial
+  # releases are never created on the tag. Run publish-ini.yml manually or let it
+  # fire from an INI push to produce the canonical release.

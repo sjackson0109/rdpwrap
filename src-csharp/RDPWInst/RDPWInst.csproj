@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>RDPWInst</RootNamespace>
+    <AssemblyName>RDPWInst</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Description>Command-line installer and manager for RDP Wrapper — installs rdpwrap.dll and configures the Terminal Services layer.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RDPWrap\RDPWrap.csproj" />
+  </ItemGroup>
+
+  <!--
+    Embedded payload resources.
+    Place the compiled DLL binaries and rdpwrap.ini into src-csharp/RDPWInst/Resources/
+    before building. The resource names referenced in InstallerEngine.cs are:
+      RDPWInst.Resources.rdpw32.dll
+      RDPWInst.Resources.rdpw64.dll
+      RDPWInst.Resources.rdpwrap.ini
+      RDPWInst.Resources.rdpclip6032.exe
+      RDPWInst.Resources.rdpclip6064.exe
+      RDPWInst.Resources.rdpclip6132.exe
+      RDPWInst.Resources.rdpclip6164.exe
+      RDPWInst.Resources.rfxvmt32.dll
+      RDPWInst.Resources.rfxvmt64.dll
+      RDPWInst.Resources.license.txt
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\rdpw32.dll"       Condition="Exists('Resources\rdpw32.dll')" />
+    <EmbeddedResource Include="Resources\rdpw64.dll"       Condition="Exists('Resources\rdpw64.dll')" />
+    <EmbeddedResource Include="Resources\rdpwrap.ini"      Condition="Exists('Resources\rdpwrap.ini')" />
+    <EmbeddedResource Include="Resources\rdpclip6032.exe"  Condition="Exists('Resources\rdpclip6032.exe')" />
+    <EmbeddedResource Include="Resources\rdpclip6064.exe"  Condition="Exists('Resources\rdpclip6064.exe')" />
+    <EmbeddedResource Include="Resources\rdpclip6132.exe"  Condition="Exists('Resources\rdpclip6132.exe')" />
+    <EmbeddedResource Include="Resources\rdpclip6164.exe"  Condition="Exists('Resources\rdpclip6164.exe')" />
+    <EmbeddedResource Include="Resources\rfxvmt32.dll"     Condition="Exists('Resources\rfxvmt32.dll')" />
+    <EmbeddedResource Include="Resources\rfxvmt64.dll"     Condition="Exists('Resources\rfxvmt64.dll')" />
+    <EmbeddedResource Include="Resources\license.txt"      Condition="Exists('Resources\license.txt')" />
+  </ItemGroup>
+</Project>

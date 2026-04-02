@@ -1,0 +1,73 @@
+name: Build MSI Check
+
+# Lightweight PR check that validates msi/RDPWInst.wxs compiles cleanly.
+# We stub the binary inputs (DLL/EXE) with placeholder files so WiX can
+# validate the package structure without needing a full C++ / C# build.
+# For the real release build with actual binaries, see build-and-release.yml.
+on:
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'msi/**'
+      - '.github/workflows/build-msi-check.yml'
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+permissions:
+  contents: read
+
+jobs:
+  wix-check:
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/Directory.Build.props', '**/*.csproj', '**/global.json') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      # Create minimal placeholder files so WiX can resolve all File references
+      # in RDPWInst.wxs without requiring an actual C++ or C# build.
+      # WiX v5 harvests file size at build time but does not validate binary content.
+      - name: Create placeholder binary inputs
+        shell: pwsh
+        run: |
+          $arch = 'x64'
+          # Placeholder DLL and EXEs — WiX only needs the files to exist
+          foreach ($name in @("rdpwrap_$arch.dll", "RDPWInst_$arch.exe", "RDPConf_$arch.exe", "RDPCheck_$arch.exe")) {
+            $dest = "msi\$name"
+            if (-not (Test-Path $dest)) {
+              [System.IO.File]::WriteAllBytes($dest, [byte[]](0x4D, 0x5A))  # MZ stub
+              Write-Host "Created stub: $dest"
+            }
+          }
+          Write-Host "Placeholder files in msi\:"
+          Get-ChildItem msi\ -File | Format-Table Name, Length
+
+      # Build only the x64 MSI — enough to validate WXS structure and WiX rules.
+      # A failure here means a real WiX schema/syntax/reference error that would
+      # also break the release build.
+      - name: Build MSI (x64 WiX check)
+        shell: pwsh
+        run: |
+          dotnet build msi/RDPWInst.wixproj `
+            -c Release `
+            /p:Platform=x64 `
+            /p:PackageVersion=0.0.1 `
+            /p:OutputPath="$PWD/msi_check_out/x64"
+          if ($LASTEXITCODE -ne 0) { throw "WiX build failed — review errors above" }
+          Write-Host "WiX check passed."
+          Get-ChildItem msi_check_out -Recurse -Filter "*.msi" | Format-Table FullName, Length

@@ -1,0 +1,24 @@
+<Project Sdk="WixToolset.Sdk/5.0.2">
+  <!--
+    RDP Wrapper MSI project — WiX v5 (dotnet build)
+
+    Build once per architecture:
+      dotnet build msi/RDPWInst.wixproj -c Release /p:Platform=x64   /p:PackageVersion=yy.M.d
+      dotnet build msi/RDPWInst.wixproj -c Release /p:Platform=x86   /p:PackageVersion=yy.M.d
+      dotnet build msi/RDPWInst.wixproj -c Release /p:Platform=arm64 /p:PackageVersion=yy.M.d
+
+    Each build expects arch-specific inputs alongside this .wixproj:
+      RDPWInst_<arch>.exe  RDPConf_<arch>.exe  RDPCheck_<arch>.exe
+      rdpwrap_<arch>.dll   rdpwrap.ini
+  -->
+  <PropertyGroup>
+    <!-- OutputName includes arch so all three MSIs can coexist in the same output dir -->
+    <OutputName>RDPWrapper-$(Platform)</OutputName>
+    <!-- Version is overridden on the CLI: /p:PackageVersion=yy.M.d (e.g. 26.4.1) -->
+    <PackageVersion>26.3.31</PackageVersion>
+    <!-- Expose PackageVersion to the WiX preprocessor as $(var.PackageVersion) -->
+    <DefineConstants>PackageVersion=$(PackageVersion)</DefineConstants>
+    <!-- Suppress ICE warnings that do not apply to this package type -->
+    <SuppressIces>ICE61</SuppressIces>
+  </PropertyGroup>
+</Project>

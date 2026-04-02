@@ -1,0 +1,34 @@
+version: 2
+
+updates:
+  # Keep GitHub Actions pinned to their latest minor/patch releases
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    groups:
+      actions-minor:
+        patterns: ["*"]
+
+  # Keep .NET SDK NuGet dependencies up to date (for src-csharp/)
+  - package-ecosystem: nuget
+    directory: /src-csharp
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+
+  # Monitor git submodules for upstream releases
+  # Covers: src-csharp/RDPOffsetFinder (llccd/RDPWrapOffsetFinder)
+  #         src-csharp/RDPOffsetFinder/zydis (zyantific/zydis)
+  # Note: gitsubmodule ecosystem is currently in Dependabot beta.
+  # Enable once the feature is available for the repository, or track
+  # submodule versions manually via the pinned SHA in .gitmodules.
+  - package-ecosystem: gitsubmodule
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5

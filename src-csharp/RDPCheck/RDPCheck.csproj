@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <UseWindowsForms>true</UseWindowsForms>
+    <RootNamespace>RDPCheck</RootNamespace>
+    <AssemblyName>RDPCheck</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <Description>WinForms RDP loopback connection tester — validates that RDP Wrapper is installed and accepting connections correctly.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="app.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RDPWrap\RDPWrap.csproj" />
+  </ItemGroup>
+
+  <!-- COM interop for AxMsRdpClient2 — generated via:
+       tlbimp %SystemRoot%\System32\mstscax.dll /out:MSTSCLib.dll
+       Then reference it here:
+  <ItemGroup>
+    <Reference Include="MSTSCLib">
+      <HintPath>Interop\MSTSCLib.dll</HintPath>
+    </Reference>
+    <Reference Include="AxInterop.MSTSCLib">
+      <HintPath>Interop\AxInterop.MSTSCLib.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  -->
+</Project>
