@@ -11,6 +11,16 @@ on:
       - 'src-csharp/**'
       - '.github/workflows/build-and-release.yml'
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v2026.4.2). Leave blank to auto-generate from date.'
+        required: false
+        default: ''
+      prerelease:
+        description: 'Mark as pre-release'
+        type: boolean
+        required: false
+        default: false
 
 concurrency:
   group: release
@@ -557,9 +567,15 @@ jobs:
           $iniContent = Get-Content msi/rdpwrap.ini -Raw
           $iniDate    = if ($iniContent -match 'Updated=([^\r\n]+)') { $Matches[1] } else { 'unknown' }
 
-          echo "date=$date"       >> $env:GITHUB_OUTPUT
-          echo "stamp=$stamp"     >> $env:GITHUB_OUTPUT
-          echo "inidate=$iniDate" >> $env:GITHUB_OUTPUT
+          $inputTag   = '${{ inputs.tag }}'.Trim()
+          $tagName    = if ($inputTag -ne '') { $inputTag } else { "ini-$date" }
+          $outputName = if ($inputTag -ne '') { "Release $inputTag" } else { "INI Update $date" }
+
+          echo "date=$date"               >> $env:GITHUB_OUTPUT
+          echo "stamp=$stamp"             >> $env:GITHUB_OUTPUT
+          echo "inidate=$iniDate"         >> $env:GITHUB_OUTPUT
+          echo "tag_name=$tagName"        >> $env:GITHUB_OUTPUT
+          echo "release_name=$outputName" >> $env:GITHUB_OUTPUT
 
       # ── Validate the INI has required sections and mandatory per-version keys ─
       - name: Validate INI
@@ -695,9 +711,9 @@ jobs:
         # Bump this SHA when upgrading: https://github.com/softprops/action-gh-release/releases
         uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe  # v2
         with:
-          tag_name: "ini-${{ steps.meta.outputs.date }}"
-          name: "INI Update ${{ steps.meta.outputs.date }}"
-          prerelease: false
+          tag_name: "${{ steps.meta.outputs.tag_name }}"
+          name: "${{ steps.meta.outputs.release_name }}"
+          prerelease: ${{ inputs.prerelease || false }}
           make_latest: true
           body: |
             ## RDP Wrapper - Automated Release
