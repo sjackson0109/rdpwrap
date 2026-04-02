@@ -119,15 +119,20 @@ jobs:
               /p:PlatformToolset=v143 `
               /v:minimal
 
-            # Build RDPWrapOffsetFinder
-            msbuild src-csharp/RDPOffsetFinder/RDPWrapOffsetFinder/RDPWrapOffsetFinder.vcxproj `
+            # Build via .sln so $(SolutionDir) resolves to the submodule root
+            # where zydis/ lives - vcxproj AdditionalIncludeDirectories and
+            # AdditionalDependencies both use $(SolutionDir)\zydis\... and
+            # fail with C1083 when the vcxproj is targeted directly.
+            msbuild src-csharp/RDPOffsetFinder/RDPWrapOffsetFinder.sln `
+              /t:RDPWrapOffsetFinder `
               /p:Configuration=Release `
               /p:Platform="$($cfg.Platform)" `
               /p:PlatformToolset=v143 `
               /v:minimal
 
             $arch   = $cfg.Arch
-            $exeSrc = "src-csharp/RDPOffsetFinder/RDPWrapOffsetFinder/$($cfg.Platform)/Release/RDPWrapOffsetFinder.exe"
+            # .sln build outputs to <SolutionDir>/<Platform>/Release/ not <ProjectDir>/<Platform>/Release/
+            $exeSrc = "src-csharp/RDPOffsetFinder/$($cfg.Platform)/Release/RDPWrapOffsetFinder.exe"
             $dllSrc = "src-csharp/RDPOffsetFinder/zydis/msvc/bin/$($cfg.ZydisBin)/Zydis.dll"
             Copy-Item $exeSrc ".\RDPWrapOffsetFinder_$arch.exe"
             Copy-Item $dllSrc ".\Zydis_$arch.dll"
