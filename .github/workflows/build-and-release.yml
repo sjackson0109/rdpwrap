@@ -119,8 +119,12 @@ jobs:
               /p:PlatformToolset=v143 `
               /v:minimal
 
-            # Build RDPWrapOffsetFinder
-            msbuild src-csharp/RDPOffsetFinder/RDPWrapOffsetFinder/RDPWrapOffsetFinder.vcxproj `
+            # Build via .sln so $(SolutionDir) resolves to the submodule root
+            # where zydis/ lives - vcxproj AdditionalIncludeDirectories and
+            # AdditionalDependencies both use $(SolutionDir)\zydis\... and
+            # fail with C1083 when the vcxproj is targeted directly.
+            msbuild src-csharp/RDPOffsetFinder/RDPWrapOffsetFinder.sln `
+              /t:RDPWrapOffsetFinder `
               /p:Configuration=Release `
               /p:Platform="$($cfg.Platform)" `
               /p:PlatformToolset=v143 `
