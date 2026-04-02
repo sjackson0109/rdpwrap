@@ -1,7 +1,6 @@
-// Copyright 2024 sjackson0109 — Apache License 2.0
+// Copyright 2026 sjackson0109 — Apache License 2.0
 //
 // RDPWInst — RDP Wrapper Library Installer
-// Direct C# translation of src-installer/RDPWInst.dpr
 
 using RDPWrap.Common;
 
@@ -9,18 +8,28 @@ namespace RDPWInst;
 
 internal static class Program
 {
-    private const string Banner =
-        "RDP Wrapper Library v1.6.2\r\n" +
-        "Installer v3.0 (C# edition)\r\n" +
-        "Copyright (C) Stas'M Corp. 2018 / sjackson0109 2024\r\n";
+    private static string Banner
+    {
+        get
+        {
+            var v = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+            string version = v is null ? "unknown" : $"{v.Major}.{v.Minor}.{v.Build}";
+            return
+                $"RDP Wrapper Library\r\n" +
+                $"Installer v{version} (C# edition)\r\n" +
+                "Copyright (C) Stas'M Corp. 2018\r\n" +
+                "Maintained by sjackson0109 2026\r\n";
+        }
+    }
 
     private const string Usage =
         "USAGE:\r\n" +
-        "RDPWInst.exe [-l|-i[-s][-o]|-w|-u[-k]|-r]\r\n\r\n" +
+        "RDPWInst.exe [-l|-i[-s][-o][-f]|-w|-u[-k]|-r]\r\n\r\n" +
         "-l          display the license agreement\r\n" +
         "-i          install wrapper to Program Files folder (default)\r\n" +
         "-i -s       install wrapper to System32 folder\r\n" +
         "-i -o       online install mode (loads latest INI file)\r\n" +
+        "-i -f       force install: silently uninstall existing installation first\r\n" +
         "-w          get latest update for INI file\r\n" +
         "-u          uninstall wrapper\r\n" +
         "-u -k       uninstall wrapper and keep settings\r\n" +
@@ -40,6 +49,7 @@ internal static class Program
              args[0] != "-r"))
         {
             Console.WriteLine(Usage);
+            Pause();
             return 0;
         }
 
@@ -49,6 +59,7 @@ internal static class Program
             var license = ResourceHelper.ReadText("RDPWInst.Resources.license.txt",
                               System.Reflection.Assembly.GetExecutingAssembly());
             Console.WriteLine(license ?? "(license resource not found)");
+            Pause();
             return 0;
         }
 
@@ -57,27 +68,47 @@ internal static class Program
         {
             Console.Error.WriteLine("[-] Unsupported Windows version:");
             Console.Error.WriteLine("  only >= 6.0 (Vista, Server 2008 and newer) are supported.");
+            Pause();
             return 1;
         }
 
         if (!ArchHelper.IsSupported)
         {
             Console.Error.WriteLine("[-] Unsupported processor architecture.");
+            Pause();
             return 1;
         }
 
         var engine = new InstallerEngine();
         engine.CheckInstall();
 
-        return args[0] switch
+        int rc = args[0] switch
         {
             "-i" => engine.Install(
                         toSystem32: args.Contains("-s"),
-                        online:     args.Contains("-o")),
+                        online:     args.Contains("-o"),
+                        force:      args.Contains("-f")),
             "-u" => engine.Uninstall(keepSettings: args.Contains("-k")),
             "-w" => engine.Update(),
             "-r" => engine.Restart(),
             _    => 0
         };
+
+        Pause();
+        return rc;
+    }
+
+    /// <summary>
+    /// Waits for a keypress only when the process owns its console window
+    /// (i.e. was launched via double-click or UAC elevation rather than
+    /// piped/redirected from a script).
+    /// </summary>
+    private static void Pause()
+    {
+        if (!Console.IsInputRedirected && !Console.IsOutputRedirected)
+        {
+            Console.WriteLine("\nPress any key to exit...");
+            Console.ReadKey(intercept: true);
+        }
     }
 }

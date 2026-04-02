@@ -4,7 +4,88 @@ This guide explains the technical process for reverse engineering new Windows bu
 
 ## Overview
 
-When Microsoft releases new Windows updates, the `termsrv.dll` file changes, and RDP Wrapper needs updated offset configurations to function properly. This document outlines the manual reverse engineering process required to find these offsets.
+When Microsoft releases new Windows updates, the `termsrv.dll` file changes, and RDP Wrapper needs updated offset configurations to function properly. This document covers **two paths**:
+
+1. **[Quick path — RDPWrapOffsetFinder (recommended)](#quick-path-rdpwrapoffsetfinder-automated):** the compiled tool bundled in every release can generate a valid INI section in seconds on most builds.
+2. **[Manual path — disassembly and reverse engineering](#manual-path-disassembly-and-reverse-engineering):** used when the automated tool cannot find all offsets for a new or unusual build.
+
+---
+
+## Quick path: RDPWrapOffsetFinder (automated)
+
+> **TL;DR** — run the tool, copy the generated INI block, open a PR.
+
+RDPWrapOffsetFinder (by **llccd**, bundled in every release as `RDPWrapOffsetFinder_x64.exe` and `RDPWrapOffsetFinder_x86.exe`) performs automated static analysis on the installed `termsrv.dll` and emits a ready-to-use INI section.
+
+### Step A: Run RDPWrapOffsetFinder
+
+```powershell
+# Locate termsrv.dll version (so you know what tag to add)
+(Get-Item C:\Windows\System32\termsrv.dll).VersionInfo.ProductVersion
+
+# Run the tool (run as Administrator; it reads the locked DLL via sharing flags)
+.\RDPWrapOffsetFinder_x64.exe
+```
+
+On success the tool prints an INI block similar to:
+
+```ini
+[10.0.26100.3915]
+SingleUserPatch.x64=1
+SingleUserOffset.x64=0A1B2C
+...
+```
+
+If the tool exits with `Unsupported version`, try the nosym (no-symbols) variant:
+
+```powershell
+.\RDPWrapOffsetFinder_nosym_x64.exe
+```
+
+### Step B: Use the autoupdate helper (optional)
+
+The `autoupdate/` directory in `src-csharp/RDPOffsetFinder/` contains a convenience script that wraps the tool, appends the output to a local copy of `rdpwrap.ini`, and validates the result:
+
+```batch
+cd src-csharp\RDPOffsetFinder\RDPWrapOffsetFinder\autoupdate
+autoupdate.bat
+```
+
+The script will:
+1. Run `RDPWrapOffsetFinder.exe` against the current system's `termsrv.dll`.
+2. Merge the new section into `rdpwrap_template.ini`.
+3. Print the diff so you can review before committing.
+
+### Step C: Validate the generated block
+
+Before opening a pull request:
+
+```powershell
+# Quick sanity check — restart Terminal Services with the new INI
+net stop TermService
+Copy-Item .\rdpwrap_updated.ini "C:\Program Files\RDP Wrapper\rdpwrap.ini"
+net start TermService
+
+# Visual validation
+.\RDPCheck.exe   # should show "Installed", "Listening", and "Supported"
+```
+
+### Step D: Submit a pull request
+
+1. Add (or update) the version block in `msi/rdpwrap.ini`.
+2. Commit with message: `ini: add support for 10.0.XXXXX.YYYY`.
+3. Open a pull request against the `main` branch using the [bug_report](.github/ISSUE_TEMPLATE/bug_report.yml) template.  
+   Include: the output of `RDPWrapOffsetFinder.exe`, your `termsrv.dll` version, and a screenshot of `RDPCheck.exe` showing "Supported".
+
+> **Security note:** Never attach the actual `termsrv.dll` binary — this would infringe Microsoft's licence. The version string and SHA-256 hash are sufficient for reproducibility.
+
+---
+
+## Manual path: disassembly and reverse engineering
+
+Use this path when:
+- RDPWrapOffsetFinder cannot find all offsets (prints partial output or crashes), **or**
+- You want to understand *why* a patch works, not just *where* to apply it.
 
 ## Prerequisites
 

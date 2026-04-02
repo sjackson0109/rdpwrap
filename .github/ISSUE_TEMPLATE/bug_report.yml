@@ -58,6 +58,7 @@ body:
       options:
         - x64 (64-bit)
         - x86 (32-bit)
+        - ARM64
     validations:
       required: true
 

@@ -1,0 +1,4 @@
+[submodule "src-csharp/RDPOffsetFinder"]
+	path = src-csharp/RDPOffsetFinder
+	url = https://github.com/llccd/RDPWrapOffsetFinder
+	shallow = true

@@ -1,7 +1,7 @@
 <Project>
   <PropertyGroup>
-    <TargetFramework>net8.0-windows</TargetFramework>
-    <Platforms>x86;x64</Platforms>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Platforms>x86;x64;arm64</Platforms>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -11,5 +11,34 @@
     <SelfContained>false</SelfContained>
     <!-- Reproducible builds -->
     <Deterministic>true</Deterministic>
+
+    <!--
+      Version is intentionally kept as a build-time default for local development.
+      CI overrides these three properties on the dotnet publish command line:
+        /p:Version=yyyy.M.d  /p:AssemblyVersion=yyyy.M.d.0  /p:FileVersion=yyyy.M.d.0
+      so released binaries always embed the correct date-based version.
+    -->
+    <Version>$([System.DateTime]::Now.ToString("yyyy.M.d"))</Version>
+    <AssemblyVersion>$([System.DateTime]::Now.ToString("yyyy.M.d")).0</AssemblyVersion>
+    <FileVersion>$([System.DateTime]::Now.ToString("yyyy.M.d")).0</FileVersion>
+    <!-- Author / ownership metadata (embedded in every assembly) -->
+    <Authors>Simon Jackson</Authors>
+    <Company>Simon Jackson (@sjackson0109)</Company>
+    <Copyright>Copyright © 2026 Simon Jackson (@sjackson0109)</Copyright>
+    <Product>RDP Wrapper</Product>
+    <RepositoryUrl>https://github.com/sjackson0109/rdpwrap</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/sjackson0109/rdpwrap</PackageProjectUrl>
+
+    <!--
+      Reproducible NuGet restores.
+      RestorePackagesWithLockFile=true causes dotnet to generate packages.lock.json
+      on the first restore if it doesn't exist, and to verify it on subsequent restores.
+      Commit the generated packages.lock.json files in each project directory so that
+      CI restores are deterministic.  After committing lock files you can add
+      `- -locked-mode` to dotnet restore/publish calls in CI to enforce exact-match
+      and prevent silent dependency drift.
+    -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
 </Project>

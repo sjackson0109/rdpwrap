@@ -5,10 +5,16 @@
     <RootNamespace>RDPCheck</RootNamespace>
     <AssemblyName>RDPCheck</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <Description>WinForms RDP loopback connection tester — validates that RDP Wrapper is installed and accepting connections correctly.</Description>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\RDPWrap.Common\RDPWrap.Common.csproj" />
+    <Content Include="app.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RDPWrap\RDPWrap.csproj" />
   </ItemGroup>
 
   <!-- COM interop for AxMsRdpClient2 — generated via:

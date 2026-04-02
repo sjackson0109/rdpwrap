@@ -1,7 +1,14 @@
-name: Build C++ DLL
+﻿name: Build C++ DLL
 
-# Trigger on version tags (e.g. v1.7.0) or manually
+# Trigger on:
+#   - PRs targeting main/master that touch C++ source (compile check before merge)
+#   - Version tag pushes (e.g. v1.7.0)
+#   - Manual dispatch
 on:
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'src-x86-x64-Fusix/**'
   push:
     tags:
       - 'v*'
@@ -14,12 +21,18 @@ permissions:
   contents: write
 
 jobs:
-  # ── Build x64 and Win32 release DLLs ─────────────────────────────────────────
+  # â”€â”€ Build x64 and Win32 release DLLs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   build:
     runs-on: windows-2022
     strategy:
       matrix:
-        platform: [x64, Win32]
+        include:
+          - platform: x64
+            msbuild_platform: x64
+          - platform: x86
+            msbuild_platform: Win32
+          - platform: arm64
+            msbuild_platform: ARM64
 
     steps:
       - name: Checkout repository
@@ -36,7 +49,7 @@ jobs:
         run: |
           msbuild RDPWrap.vcxproj `
             /p:Configuration=Release `
-            /p:Platform="${{ matrix.platform }}" `
+            /p:Platform="${{ matrix.msbuild_platform }}" `
             /p:PlatformToolset=v143 `
             /p:WindowsTargetPlatformVersion=10.0
 
@@ -44,50 +57,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: rdpwrap-dll-${{ matrix.platform }}
-          path: src-x86-x64-Fusix/${{ matrix.platform }}/Release/rdpwrap.dll
+          path: src-x86-x64-Fusix/Release/${{ matrix.platform }}/rdpwrap.dll
           if-no-files-found: error
 
-  # ── Assemble a GitHub Release from both DLL artifacts ────────────────────────
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
-
-    steps:
-      - name: Download x64 artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: rdpwrap-dll-x64
-          path: ./dist/x64
-
-      - name: Download Win32 artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: rdpwrap-dll-Win32
-          path: ./dist/x86
-
-      - name: Rename DLLs for release
-        run: |
-          mv dist/x64/rdpwrap.dll dist/rdpwrap_x64.dll
-          mv dist/x86/rdpwrap.dll dist/rdpwrap_x86.dll
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          prerelease: false
-          make_latest: false
-          body: |
-            ## RDP Wrapper DLL – ${{ github.ref_name }}
-
-            Built from `src-x86-x64-Fusix/` with MSVC v143 (VS 2022).
-
-            | File | Architecture |
-            |---|---|
-            | `rdpwrap_x64.dll` | x86-64 (64-bit Windows) |
-            | `rdpwrap_x86.dll` | x86 (32-bit Windows) |
-
-            > Place the appropriate DLL in `C:\Program Files\RDP Wrapper\rdpwrap.dll`
-            > and run `RDPWInst.exe -i` to install.
-          files: |
-            dist/rdpwrap_x64.dll
-            dist/rdpwrap_x86.dll
+  # NOTE: Full GitHub Releases (including rdpwrap DLLs) are published by build-and-release.yml.
+  # This workflow stops at the artifact upload step so that partial releases are never
+  # created on tag pushes. Run build-and-release.yml to produce the canonical release.

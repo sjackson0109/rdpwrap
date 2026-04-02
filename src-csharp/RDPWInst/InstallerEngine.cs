@@ -1,7 +1,6 @@
-// Copyright 2024 sjackson0109 — Apache License 2.0
+// Copyright 2026 sjackson0109 — Apache License 2.0
 //
 // InstallerEngine — translates every procedure in RDPWInst.dpr to C#.
-// Consult src-installer/RDPWInst.dpr for the authoritative Delphi source.
 
 using System.Reflection;
 using RDPWrap.Common;
@@ -35,12 +34,25 @@ internal sealed class InstallerEngine
     /// <summary>
     /// Install the wrapper. Mirrors the <c>-i</c> branch in RDPWInst.dpr.
     /// </summary>
-    public int Install(bool toSystem32, bool online)
+    public int Install(bool toSystem32, bool online, bool force = false)
     {
         if (_installed)
         {
-            Console.WriteLine("[*] RDP Wrapper Library is already installed.");
-            return unchecked((int)NativeMethods.ERROR_ACCESS_DENIED);
+            if (!force)
+            {
+                Console.WriteLine("[*] RDP Wrapper Library is already installed.");
+                return unchecked((int)NativeMethods.ERROR_ACCESS_DENIED);
+            }
+
+            Console.WriteLine("[*] Existing installation detected -- uninstalling first (force mode)...");
+            int urc = Uninstall(keepSettings: true);
+            if (urc != 0)
+            {
+                Console.Error.WriteLine($"[-] Force-uninstall failed (code {urc}) -- aborting install.");
+                return urc;
+            }
+            // Refresh state: after a successful uninstall _installed should now be false.
+            CheckInstall();
         }
 
         Console.WriteLine("[*] Notice to user:");
@@ -341,8 +353,10 @@ internal sealed class InstallerEngine
 
         if (enable)
         {
-            RegistryHelper.WriteBool(licKey,   "EnableConcurrentSessions", true);
-            RegistryHelper.WriteBool(winlogon, "AllowMultipleTSSessions",  true);
+            RegistryHelper.WriteBool(licKey,   "EnableConcurrentSessions",  true);
+            RegistryHelper.WriteBool(winlogon, "AllowMultipleTSSessions",   true);
+            RegistryHelper.WriteBool(tsKey,    "AllowRemoteRPC",            true);
+            RegistryHelper.WriteBool(tsKey,    "EnableLinkedConnections",   true);
 
             // AddIns sub-keys (only create if the parent key is absent)
             if (Microsoft.Win32.Registry.LocalMachine.OpenSubKey(addInsBase) is null)

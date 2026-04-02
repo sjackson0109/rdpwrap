@@ -1,7 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <OutputType>Library</OutputType>
-    <RootNamespace>RDPWrap.Common</RootNamespace>
-    <AssemblyName>RDPWrap.Common</AssemblyName>
-  </PropertyGroup>
-</Project>

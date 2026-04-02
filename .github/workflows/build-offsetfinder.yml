@@ -1,0 +1,93 @@
+﻿name: Build RDPWrapOffsetFinder
+
+# Trigger on:
+#   - PRs targeting main/master that touch the OffsetFinder submodule or Zydis
+#   - Version tag pushes (e.g. v1.7.0)
+#   - Manual dispatch
+on:
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'src-csharp/RDPOffsetFinder/**'
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+permissions:
+  contents: write
+
+jobs:
+  # â”€â”€ Build x64 and Win32 release exes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  build:
+    runs-on: windows-2022
+    strategy:
+      matrix:
+        include:
+          - platform: x64
+            zydis_cfg: "Release MD DLL"
+            zydis_bin: ReleaseX64
+            finder_plat: x64
+          - platform: Win32
+            zydis_cfg: "Release MD DLL"
+            zydis_bin: ReleaseX86
+            finder_plat: Win32
+
+    steps:
+      - name: Checkout repository (with submodules)
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v3
+
+      # Build Zydis as a shared DLL so we can ship Zydis.dll alongside the exe
+      - name: Build Zydis (${{ matrix.platform }})
+        working-directory: src-csharp/RDPOffsetFinder
+        run: |
+          msbuild zydis\msvc\zydis\Zydis.vcxproj `
+            /p:Configuration="${{ matrix.zydis_cfg }}" `
+            /p:Platform="${{ matrix.platform }}" `
+            /p:PlatformToolset=v143 `
+            /v:minimal
+
+      # Build the offset finder (links against the Zydis import lib just produced)
+      - name: Build RDPWrapOffsetFinder (${{ matrix.platform }})
+        working-directory: src-csharp/RDPOffsetFinder
+        run: |
+          msbuild RDPWrapOffsetFinder\RDPWrapOffsetFinder.vcxproj `
+            /p:Configuration=Release `
+            /p:Platform="${{ matrix.platform }}" `
+            /p:PlatformToolset=v143 `
+            /v:minimal
+
+      - name: Collect outputs
+        shell: pwsh
+        run: |
+          $arch  = if ("${{ matrix.platform }}" -eq "Win32") { "x86" } else { "x64" }
+          $root  = "src-csharp/RDPOffsetFinder"
+          $exe   = "$root/RDPWrapOffsetFinder/${{ matrix.finder_plat }}/Release/RDPWrapOffsetFinder.exe"
+          $dll   = "$root/zydis/msvc/bin/${{ matrix.zydis_bin }}/Zydis.dll"
+
+          Write-Host "Exe: $(Get-Item $exe | Select-Object -Exp Length) bytes"
+          Write-Host "Dll: $(Get-Item $dll | Select-Object -Exp Length) bytes"
+
+          Copy-Item $exe ".\RDPWrapOffsetFinder_$arch.exe"
+          Copy-Item $dll ".\Zydis_$arch.dll"
+
+      - name: Upload ${{ matrix.platform }} artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: finder-${{ matrix.platform }}
+          path: |
+            RDPWrapOffsetFinder_*.exe
+            Zydis_*.dll
+          if-no-files-found: error
+
+  # NOTE: Full GitHub Releases (including OffsetFinder binaries) are published by build-and-release.yml.
+  # This workflow stops at the artifact upload step so that partial releases are never
+  # created on tag pushes. Run build-and-release.yml to produce the canonical release.

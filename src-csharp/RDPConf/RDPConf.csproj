@@ -5,9 +5,20 @@
     <RootNamespace>RDPConf</RootNamespace>
     <AssemblyName>RDPConf</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <Description>WinForms configuration GUI for RDP Wrapper — manage concurrent session limits, RDP port, and security settings.</Description>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\RDPWrap.Common\RDPWrap.Common.csproj" />
+    <Content Include="app.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RDPWrap\RDPWrap.csproj" />
+  </ItemGroup>
+
+  <!-- Optional embedded license text (copy from msi/rdpwrap.ini or assets before build) -->
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\license.txt" Condition="Exists('Resources\license.txt')" />
   </ItemGroup>
 </Project>

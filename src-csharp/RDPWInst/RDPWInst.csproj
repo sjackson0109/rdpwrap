@@ -4,10 +4,11 @@
     <RootNamespace>RDPWInst</RootNamespace>
     <AssemblyName>RDPWInst</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Description>Command-line installer and manager for RDP Wrapper — installs rdpwrap.dll and configures the Terminal Services layer.</Description>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\RDPWrap.Common\RDPWrap.Common.csproj" />
+    <ProjectReference Include="..\RDPWrap\RDPWrap.csproj" />
   </ItemGroup>
 
   <!--

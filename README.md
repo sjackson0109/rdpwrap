@@ -2,11 +2,12 @@
 
 > **Maintained fork** by [@sjackson0109](https://github.com/sjackson0109) — based on the original work by [Stas'M / binarymaster](https://github.com/stascorp/rdpwrap).
 
-[![Telegram](https://img.shields.io/badge/chat-Telegram-blue.svg)](https://t.me/rdpwrap)
 ![Environment](https://img.shields.io/badge/Windows-Vista%20through%2011-brightgreen.svg)
 [![Release](https://img.shields.io/github/release/sjackson0109/rdpwrap.svg)](https://github.com/sjackson0109/rdpwrap/releases)
-[![INI publish](https://github.com/sjackson0109/rdpwrap/actions/workflows/publish-ini.yml/badge.svg)](https://github.com/sjackson0109/rdpwrap/actions/workflows/publish-ini.yml)
+[![Build and Release](https://github.com/sjackson0109/rdpwrap/actions/workflows/build-and-release.yml/badge.svg)](https://github.com/sjackson0109/rdpwrap/actions/workflows/build-and-release.yml)
 [![Build C++ DLL](https://github.com/sjackson0109/rdpwrap/actions/workflows/build-cpp.yml/badge.svg)](https://github.com/sjackson0109/rdpwrap/actions/workflows/build-cpp.yml)
+[![Build C# tools](https://github.com/sjackson0109/rdpwrap/actions/workflows/build-csharp.yml/badge.svg)](https://github.com/sjackson0109/rdpwrap/actions/workflows/build-csharp.yml)
+[![Build OffsetFinder](https://github.com/sjackson0109/rdpwrap/actions/workflows/build-offsetfinder.yml/badge.svg)](https://github.com/sjackson0109/rdpwrap/actions/workflows/build-offsetfinder.yml)
 ![License](https://img.shields.io/github/license/sjackson0109/rdpwrap.svg)
 ![Downloads](https://img.shields.io/github/downloads/sjackson0109/rdpwrap/latest/total.svg)
 ![TotalDownloads](https://img.shields.io/github/downloads/sjackson0109/rdpwrap/total.svg)
@@ -15,41 +16,22 @@ The goal of this project is to enable Remote Desktop Host support and concurrent
 
 RDP Wrapper works as a layer between Service Control Manager and Terminal Services, so the original termsrv.dll file remains untouched. Also this method is very strong against Windows Update.
 
-[pVistaST]:  http://stascorp.com/images/rdpwrap/pVistaST.jpg
-[pVistaHB]:  http://stascorp.com/images/rdpwrap/pVistaHB.jpg
-[pWin7ST]:   http://stascorp.com/images/rdpwrap/pWin7ST.jpg
-[pWin7HB]:   http://stascorp.com/images/rdpwrap/pWin7HB.jpg
-[pWin8DP]:   http://stascorp.com/images/rdpwrap/pWin8DP.jpg
-[pWin8CP]:   http://stascorp.com/images/rdpwrap/pWin8CP.jpg
-[pWin8RP]:   http://stascorp.com/images/rdpwrap/pWin8RP.jpg
-[pWin8]:     http://stascorp.com/images/rdpwrap/pWin8.jpg
-[pWin81P]:   http://stascorp.com/images/rdpwrap/pWin81P.jpg
-[pWin81]:    http://stascorp.com/images/rdpwrap/pWin81.jpg
-[pWin10TP]:  http://stascorp.com/images/rdpwrap/pWin10TP.jpg
-[pWin10PTP]: http://stascorp.com/images/rdpwrap/pWin10PTP.jpg
-[pWin10]:    http://stascorp.com/images/rdpwrap/pWin10.jpg
+> **Historical screenshots** (Vista / 7 / 8 / 10 from the original Stas'M project) are archived at:
+> https://web.archive.org/web/2015*/http://stascorp.com/images/rdpwrap/*
 
-[fVistaST]:  http://stascorp.com/images/rdpwrap/VistaST.png
-[fVistaHB]:  http://stascorp.com/images/rdpwrap/VistaHB.png
-[fWin7ST]:   http://stascorp.com/images/rdpwrap/Win7ST.png
-[fWin7HB]:   http://stascorp.com/images/rdpwrap/Win7HB.png
-[fWin8DP]:   http://stascorp.com/images/rdpwrap/Win8DP.png
-[fWin8CP]:   http://stascorp.com/images/rdpwrap/Win8CP.png
-[fWin8RP]:   http://stascorp.com/images/rdpwrap/Win8RP.png
-[fWin8]:     http://stascorp.com/images/rdpwrap/Win8.png
-[fWin81P]:   http://stascorp.com/images/rdpwrap/Win81P.png
-[fWin81]:    http://stascorp.com/images/rdpwrap/Win81.png
-[fWin10TP]:  http://stascorp.com/images/rdpwrap/Win10TP.png
-[fWin10PTP]: http://stascorp.com/images/rdpwrap/Win10PTP.png
-[fWin10]:    http://stascorp.com/images/rdpwrap/Win10.png
+### Screenshots
 
-| NT Version    | Screenshots |
-| ------------- | ----------- |
-| Windows Vista | [![Windows Vista Starter][pVistaST]][fVistaST] [![Windows Vista Home Basic][pVistaHB]][fVistaHB] |
-| Windows 7     | [![Windows 7 Starter][pWin7ST]][fWin7ST] [![Windows 7 Home Basic][pWin7HB]][fWin7HB] |
-| Windows 8     | [![Windows 8 Developer Preview][pWin8DP]][fWin8DP] [![Windows 8 Consumer Preview][pWin8CP]][fWin8CP] [![Windows 8 Release Preview][pWin8RP]][fWin8RP] [![Windows 8][pWin8]][fWin8] |
-| Windows 8.1   | [![Windows 8.1 Preview][pWin81P]][fWin81P] [![Windows 8.1][pWin81]][fWin81] |
-| Windows 10    | [![Windows 10 Technical Preview][pWin10TP]][fWin10TP] [![Windows 10 Pro Technical Preview][pWin10PTP]][fWin10PTP] [![Windows 10][pWin10]][fWin10] |
+> Screenshots are captured on Windows 11 after a successful install.  
+> Source files live in [`docs/images/`](docs/images/) — see the [capture guide](docs/images/README.md) if you want to contribute updated screenshots.
+
+| RDPConf — configuration | RDPCheck — supported | RDPCheck — warning |
+|:---:|:---:|:---:|
+| ![RDPConf configuration window](docs/images/RDPWrapperConfig.png) | ![RDPCheck showing Supported](docs/images/RDPWrapperCheck.png) | ![RDPCheck showing Warning](docs/images/RDPWrapperCheckWarning.png) |
+
+| MSI Installer — welcome | MSI Installer — complete |
+|:---:|:---:|
+| ![MSI installer welcome screen](docs/images/RDPWrapperMSI1.png) | ![MSI installer completion screen](docs/images/RDPWrapperMSI2.png) |
+
 ---
 [WinPPE]: http://forums.mydigitallife.info/threads/39411-Windows-Product-Policy-Editor
 
@@ -82,16 +64,72 @@ It's recommended to have original termsrv.dll file with the RDP Wrapper installa
 - **ARM** for Windows RT (see links below)
 - **IA-64** for Itanium-based Windows Server? *Well, I have no idea* :)
 
+### Repository structure:
+
+```
+├── msi/                        # WiX v5 MSI project + INI offset databases (rdpwrap.ini, rdpwrap-arm-kb.ini)
+├── docs/                       # Developer documentation
+├── src-x86-x64-Fusix/          # C++ — core rdpwrap.dll (native Win32, MSVC)
+└── src-csharp/                 # C# .NET 10 — all management-plane tools
+    ├── Directory.Build.props   # Shared build settings (framework, author metadata)
+    ├── RDPWrap.sln             # Visual Studio solution
+    ├── RDPWrap/                # Shared helper library (P/Invoke, registry, service helpers)
+    ├── RDPWInst/               # Command-line installer / uninstaller
+    ├── RDPConf/                # WinForms configuration GUI
+    ├── RDPCheck/               # WinForms RDP loopback tester
+    └── RDPOffsetFinder/        # Git submodule — llccd/RDPWrapOffsetFinder (C++)
+        └── zydis/              # Git submodule — zyantific/zydis disassembler
+```
+
 ### Building the binaries:
-- **x86 Delphi version** (installer, config tool, checker) — requires *Embarcadero RAD Studio 2010* or later; no automated CI yet
-- **x86/x64 C++ version** (`rdpwrap.dll`) — can be built locally with *Visual Studio 2013+*, or automatically via the [Build C++ DLL](.github/workflows/build-cpp.yml) GitHub Actions workflow (uses MSVC v143 / VS 2022) by pushing a `v*` tag
+
+#### Prerequisites
+- **.NET SDK 10** — all C# tools (`src-csharp/`)
+  - Download: https://dotnet.microsoft.com/download/dotnet/10.0
+- **Visual Studio 2022 / MSVC Build Tools v143** — two C++ components:
+  - `src-x86-x64-Fusix/` — core `rdpwrap.dll`
+  - `src-csharp/RDPOffsetFinder/` — offset finder (pulled via git submodule)
+
+#### Clone with submodules
+```powershell
+git clone --recurse-submodules https://github.com/sjackson0109/rdpwrap.git
+# or if already cloned:
+git submodule update --init --recursive
+```
+
+#### Build C# tools locally
+```powershell
+# Debug build (both platforms)
+dotnet build src-csharp/RDPWrap.sln -p:Platform=x64
+dotnet build src-csharp/RDPWrap.sln -p:Platform=x86
+
+# Release publish — single-file EXE (requires .NET 10 Desktop Runtime on target)
+dotnet publish src-csharp/RDPWInst/RDPWInst.csproj  -c Release -r win-x64 -p:PublishSingleFile=true -p:SelfContained=false
+dotnet publish src-csharp/RDPConf/RDPConf.csproj    -c Release -r win-x64 -p:PublishSingleFile=true -p:SelfContained=false
+dotnet publish src-csharp/RDPCheck/RDPCheck.csproj  -c Release -r win-x64 -p:PublishSingleFile=true -p:SelfContained=false
+```
+
+#### Build `rdpwrap.dll` locally
+```powershell
+msbuild src-x86-x64-Fusix/RDPWrap.vcxproj /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143
+```
+
+#### Build `RDPWrapOffsetFinder` locally
+```powershell
+# Build Zydis DLL first
+msbuild src-csharp/RDPOffsetFinder/zydis/msvc/zydis/Zydis.vcxproj /p:Configuration="Release MD DLL" /p:Platform=x64 /p:PlatformToolset=v143
+# Then build the offset finder
+msbuild src-csharp/RDPOffsetFinder/RDPWrapOffsetFinder/RDPWrapOffsetFinder.vcxproj /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143
+```
 
 ### CI/CD Pipelines:
 
 | Workflow | Trigger | Output |
 |---|---|---|
-| [publish-ini.yml](.github/workflows/publish-ini.yml) | Push to `main`/`master` touching `res/rdpwrap.ini`, or manual | GitHub Release with `rdpwrap.ini`, `RDPWrapOffsetFinder_x64/x86.exe`, `Zydis_x64/x86.dll` |
-| [build-cpp.yml](.github/workflows/build-cpp.yml) | Version tag push (`v*`) | GitHub Release with `rdpwrap_x64.dll` and `rdpwrap_x86.dll` |
+| [build-and-release.yml](.github/workflows/build-and-release.yml) | Push to `main`/`master` touching any source, INI, or the workflow file itself; or manual | **Canonical GitHub Release** — DLLs (x64/x86/arm64), C# tools, MSI packages, self-contained bundles, OffsetFinder, `rdpwrap.ini`, `rdpwrap-arm-kb.ini` |
+| [build-csharp.yml](.github/workflows/build-csharp.yml) | PR to `main`/`master` touching `src-csharp/**`; version tag push (`v*`); or manual | PR compile check + artifact upload (no release) — use `build-and-release.yml` for a full release |
+| [build-cpp.yml](.github/workflows/build-cpp.yml) | PR to `main`/`master` touching `src-x86-x64-Fusix/**`; version tag push (`v*`); or manual | PR compile check + artifact upload (no release) — use `build-and-release.yml` for a full release |
+| [build-offsetfinder.yml](.github/workflows/build-offsetfinder.yml) | PR to `main`/`master` touching `src-csharp/RDPOffsetFinder/**`; version tag push (`v*`); or manual | PR compile check + artifact upload (no release) — use `build-and-release.yml` for a full release |
 
 [andrewblock]:   http://web.archive.org/web/20150810054558/http://andrewblock.net/enable-remote-desktop-on-windows-8-core/
 [mydigitallife]: http://forums.mydigitallife.info/threads/55935-RDP-Wrapper-Library-(works-with-Windows-8-1-Basic)
@@ -125,14 +163,17 @@ It's recommended to have original termsrv.dll file with the RDP Wrapper installa
 
 ### Files in release package:
 
-| File name | Description |
-| --------- | ----------- |
-| `RDPWInst.exe`  | RDP Wrapper Library installer/uninstaller |
-| `RDPCheck.exe`  | Local RDP Checker (you can check the RDP is working) |
-| `RDPConf.exe`   | RDP Wrapper Configuration |
-| `install.bat`   | Quick install batch file |
-| `uninstall.bat` | Quick uninstall batch file |
-| `update.bat`    | Quick update batch file |
+| File name | Architecture | Description |
+| --------- | ------------ | ----------- |
+| `RDPWInst_x64.exe` | x64 | RDP Wrapper Library installer/uninstaller (C#, requires .NET 10) |
+| `RDPWInst_x86.exe` | x86 | RDP Wrapper Library installer/uninstaller (C#, requires .NET 10) |
+| `RDPCheck_x64.exe` | x64 | Local RDP Checker — verify RDP is working (C#, requires .NET 10) |
+| `RDPCheck_x86.exe` | x86 | Local RDP Checker — verify RDP is working (C#, requires .NET 10) |
+| `RDPConf_x64.exe`  | x64 | RDP Wrapper Configuration GUI (C#, requires .NET 10) |
+| `RDPConf_x86.exe`  | x86 | RDP Wrapper Configuration GUI (C#, requires .NET 10) |
+| `rdpwrap_x64.dll`  | x64 | Core RDP Wrapper DLL (C++, no runtime required) |
+| `rdpwrap_x86.dll`  | x86 | Core RDP Wrapper DLL (C++, no runtime required) |
+| `rdpwrap.ini`      | — | Offset database (updated automatically on every INI push) |
 
 ### Frequently Asked Questions
 
@@ -146,11 +187,11 @@ There is no definitive answer, see [this discussion](https://github.com/stascorp
 
 > The installer tries to access the Internet, is it normal behaviour?
 
-Yes, it works in online mode by default. You may disable it by removing `-o` flag in the `install.bat` file.
+Yes, it works in online mode by default. You may disable it by passing `-i` without the `-o` flag: `RDPWInst_x64.exe -i`.
 
 > What is online install mode?
 
-Online install mode was introduced in version 1.6.1. When installing for the first time using this mode, the installer downloads the [latest `rdpwrap.ini`](https://github.com/sjackson0109/rdpwrap/releases/latest/download/rdpwrap.ini) from this repository's GitHub Releases — published automatically by CI/CD whenever `res/rdpwrap.ini` is updated. If your `termsrv.dll` version is not yet listed in the downloaded INI, the installer will additionally download [RDPWrapOffsetFinder](https://github.com/llccd/RDPWrapOffsetFinder) and attempt to auto-generate the missing offsets on the spot.
+Online install mode was introduced in version 1.6.1. When installing for the first time using this mode, the installer downloads the [latest `rdpwrap.ini`](https://github.com/sjackson0109/rdpwrap/releases/latest/download/rdpwrap.ini) from this repository's GitHub Releases — published automatically by CI/CD whenever `msi/rdpwrap.ini` is updated. If your `termsrv.dll` version is not yet listed in the downloaded INI, the installer will additionally download [RDPWrapOffsetFinder](https://github.com/llccd/RDPWrapOffsetFinder) and attempt to auto-generate the missing offsets on the spot.
 
 > What is INI file and why we need it?
 
@@ -162,7 +203,7 @@ Beginning with version 1.5 the `rdpwrap.dll` is not updated anymore, since all s
 
 > Config Tool shows `[not supported]` and RDP doesn't work. What can I do?
 
-Make sure you're connected to the Internet and run `update.bat`. This will download the latest INI from GitHub Releases and, if your `termsrv.dll` version is still missing, will automatically run [RDPWrapOffsetFinder](https://github.com/llccd/RDPWrapOffsetFinder) to generate offsets for your specific build.
+Make sure you're connected to the Internet and run `RDPWInst_x64.exe -w` from an Administrator command prompt. This will download the latest INI from GitHub Releases and, if your `termsrv.dll` version is still missing, will automatically run [RDPWrapOffsetFinder](https://github.com/llccd/RDPWrapOffsetFinder) to generate offsets for your specific build.
 
 > Update doesn't help, it still shows `[not supported]`.
 
@@ -187,10 +228,41 @@ Check the [issues](https://github.com/sjackson0109/rdpwrap/issues) section to se
 
 ### Change log:
 
+#### 2026.03.31
+- **Repository housekeeping** — removed six obsolete files: `res/legacy.install.bat`, `res/clearres.bat`, `res/build_wxs.bat`, `res/RDPWInst.wxs` (WiX v3.11 MSI, unmaintained), `res/rdpwrap-ini-kb.txt` (stale 2018 INI snapshot), and empty `src-csharp/RDPWrap.Common/` stub directory
+- `bin/install.bat`, `bin/uninstall.bat`, `bin/update.bat` — rewritten with architecture detection; now invoke the correct `RDPWInst_x64.exe` / `RDPWInst_x86.exe` (previously called non-existent `RDPWInst.exe`); later removed in favour of the MSI installer
+- CI/CD: `build-cpp.yml`, `build-csharp.yml`, `build-offsetfinder.yml` — standalone `release` jobs removed; `build-and-release.yml` is now the sole release publisher, eliminating duplicate partial releases on tag pushes
+- `build-csharp.yml` runner harmonised to `windows-2022`; hardcoded `signtool.exe` SDK path replaced with glob-based discovery
+- `build-and-release.yml` — added **embedded-resource staging** step (copies built DLLs + INI into `RDPWInst/Resources/` before `dotnet publish`, enabling offline bundled install); added **SHA-256 audit log** for third-party sergiye binaries; `msi/rdpwrap-arm-kb.ini` added to release assets
+- **ARM64 support** — `Release|ARM64` added to `src-x86-x64-Fusix/RDPWrap.vcxproj`; `build-cpp.yml` and `build-and-release.yml` now build and ship `rdpwrap_arm64.dll`; `build-csharp.yml` and `build-and-release.yml` publish `RDPWInst_arm64.exe`, `RDPConf_arm64.exe`, `RDPCheck_arm64.exe`; `Directory.Build.props` adds `arm64` to `Platforms`
+- **WiX v5 MSI packaging** — new `msi/RDPWInst.wxs` (WiX v5 schema v4, dual-arch, MajorUpgrade) and `msi/RDPWInst.wixproj`; replaces the deleted v3.11 artefacts; MSI build steps are now inlined into `build-and-release.yml` (a standalone `build-msi.yml` was created then removed as redundant)
+- **Self-contained publish** — `build-and-release.yml` produces `*_x64_sc.exe`, `*_x86_sc.exe`, `*_arm64_sc.exe` for all three C# tools and bundles them into `RDPWrapper-SelfContained.zip`; users without .NET 10 Desktop Runtime can use these
+- **Version stamp automation** — `build-and-release.yml` computes a `yyyy.M.d` stamp and passes `-p:Version=` to every `dotnet publish` call; `Directory.Build.props` documents the CI override pattern
+- **Changelog automation** — `build-and-release.yml` now includes a `Generate changelog` step that queries merged PRs since the previous release and embeds them in the GitHub Release body
+- **Dependabot** — `.github/dependabot.yml` added for `github-actions` and `nuget` ecosystems (weekly, Monday schedule)
+- **Sergiye hash-pin scaffold** — `tools/sergiye-hashes.json` created; `build-and-release.yml` validates downloaded `rdpWrapper_*.exe` hashes against this file when populated
+- **Code-signing guide** added — `docs/CODE-SIGNING.md` documents certificate acquisition, PFX export, base64 encoding, and GitHub secret upload; the signing step in `build-and-release.yml` and `build-csharp.yml` fires automatically once `CODESIGN_CERT_BASE64` and `CODESIGN_CERT_PASSWORD` secrets are set
+- **Sergiye hash pins live** — `tools/update-sergiye-hashes.ps1` automation script created; `tools/sergiye-hashes.json` populated with verified SHA-256 hashes for `sergiye/rdpWrapper` release `2.10`; `build-and-release.yml` hash-verification step is now enforcing the pinned values
+- **Screenshot infrastructure** — `docs/images/` directory and capture guide created; README restored with four-cell screenshot table using relative in-repo paths (PNG files pending first capture)
+- **Submodule shallow-clone** — `shallow = true` added to `.gitmodules`; `docs/SUBMODULE-UPDATE.md` documents check-out, update, and rollback procedures (`RDPOffsetFinder` is already pinned to `v0.9`)
+- **`tools/` reference added to `docs/`** — `update-sergiye-hashes.ps1` is self-documenting via `Get-Help`; `CODE-SIGNING.md`, `SUBMODULE-UPDATE.md`, `images/README.md` added to `docs/`
+
+#### 2026.03.30
+- **Full C# port complete** — `RDPWInst`, `RDPConf`, `RDPCheck`, and shared library all ported from Delphi to C# / .NET 10; Delphi is no longer required to build
+- Obsolete Delphi source folders removed (`src-installer/`, `src-rdpcheck/`, `src-rdpconfig/`, `src-x86-binarymaster/`)
+- Shared library renamed from `RDPWrap.Common/` to `RDPWrap/` for a cleaner folder layout; namespace `RDPWrap.Common` preserved for source compatibility
+- **[llccd/RDPWrapOffsetFinder](https://github.com/llccd/RDPWrapOffsetFinder) added as a git submodule** at `src-csharp/RDPOffsetFinder/` (including nested `zydis` → `zycore` submodules) — offset finder now built from source rather than fetching pre-built binaries
+- Pre-built binary cache (`tools/RDPWrapOffsetFinder/`) and `update-finder-tools.yml` workflow removed; `build-and-release.yml` now builds the offset finder directly from the submodule
+- New workflow [`build-offsetfinder.yml`](.github/workflows/build-offsetfinder.yml) — builds `RDPWrapOffsetFinder` + `Zydis.dll` for x64 and Win32 from source on version tag push
+- New workflow [`build-csharp.yml`](.github/workflows/build-csharp.yml) — publishes self-contained single-file x64/x86 EXEs on version tag push; optional `signtool.exe` code-signing step wired to `CODESIGN_CERT_BASE64` / `CODESIGN_CERT_PASSWORD` repository secrets
+- [`build-and-release.yml`](.github/workflows/build-and-release.yml) updated — checkout uses `submodules: recursive`; builds and bundles `RDPWInst`, `RDPConf`, `RDPCheck`, and `RDPWrapOffsetFinder` (all x64 + x86) alongside the existing DLL and INI assets
+- Author metadata (`Simon Jackson / @sjackson0109`, copyright, repository URL) embedded into all four C# assemblies via `Directory.Build.props`
+- `src-csharp/Directory.Build.props` targets `net10.0-windows`; `x86` and `x64` platforms; `Nullable` + `ImplicitUsings` enabled
+
 #### 2026.03.29
 - Fork maintained by [@sjackson0109](https://github.com/sjackson0109)
 - INI source redirected from unmaintained stascorp upstream to this repository's GitHub Releases
-- **CI/CD pipeline added** — [`publish-ini.yml`](.github/workflows/publish-ini.yml) publishes `rdpwrap.ini` and the `RDPWrapOffsetFinder` tools as release assets on every INI change
+- **CI/CD pipeline added** — [`build-and-release.yml`](.github/workflows/build-and-release.yml) publishes `rdpwrap.ini` and the `RDPWrapOffsetFinder` tools as release assets on every INI change
 - **CI/CD pipeline added** — [`build-cpp.yml`](.github/workflows/build-cpp.yml) builds `rdpwrap_x64.dll` / `rdpwrap_x86.dll` via MSVC v143 (VS 2022) on version tag push
 - **Auto-offset generation** added to `RDPWInst.dpr` — on install (`-i`) and update (`-w`), if the running `termsrv.dll` version is absent from the INI the installer downloads `RDPWrapOffsetFinder` from release assets and appends the generated `[x.x.xxxxx.xxxxx]` section automatically; inspired by [sergiye/rdpWrapper](https://github.com/sergiye/rdpWrapper)
 - New installer helpers: `DownloadFileToDisk`, `INIHasSection`, `TryAutoGenerateOffsets`
@@ -476,15 +548,15 @@ Check the [issues](https://github.com/sjackson0109/rdpwrap/issues) section to se
 - Windows Server 2016 Technical Preview
 
 Installation instructions:
-- Download latest release binaries and unpack files
-- Right-click on **`install.bat`** and select Run as Administrator
+- Download `RDPWrapper-<version>.msi` from the [GitHub Releases](https://github.com/sjackson0109/rdpwrap/releases) page
+- Double-click the MSI and accept the UAC prompt — the installer detects your architecture automatically
 - See command output for details
 
 To update INI file:
-- Right-click on **`update.bat`** and select Run as Administrator
+- Open an Administrator command prompt in `%ProgramFiles%\RDP Wrapper`
+- Run `RDPWInst_x64.exe -w` (or `RDPWInst_x86.exe -w` on 32-bit Windows)
 - See command output for details
 
 To uninstall:
-- Go to the directory where you extracted the files
-- Right-click on **`uninstall.bat`** and select Run as Administrator
-- See command output for details
+- Open **Add or Remove Programs** and uninstall **RDP Wrapper Library**
+- Alternatively run `msiexec /x RDPWrapper-<version>.msi` from an elevated prompt

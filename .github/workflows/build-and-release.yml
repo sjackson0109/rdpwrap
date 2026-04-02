@@ -1,0 +1,760 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'msi/rdpwrap.ini'
+      - 'msi/rdpwrap-arm-kb.ini'
+      - 'msi/**'
+      - 'src-x86-x64-Fusix/**'
+      - 'src-csharp/**'
+      - '.github/workflows/build-and-release.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+permissions:
+  contents: write
+
+# ────────────────────────────────────────────────────────────────────────────
+# Job dependency / parallelism map
+#
+#   build-dll ───────────────► build-csharp ──────────► build-msi ──┐
+#   build-offsetfinder ───────────────────────────────────────────► release
+#   download-sergiye   ───────────────────────────────────────────► release
+#                                                        build-dll ─┘
+# ────────────────────────────────────────────────────────────────────────────
+
+jobs:
+
+  # ── Job 1: Build rdpwrap.dll (x64, x86, ARM64) ────────────────────────────
+  # No job dependencies — starts immediately.
+  build-dll:
+    name: Build rdpwrap DLL
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v3
+
+      - name: Build rdpwrap.dll (x64, Win32, ARM64)
+        shell: pwsh
+        run: |
+          foreach ($platform in @('x64', 'Win32', 'ARM64')) {
+            msbuild src-x86-x64-Fusix/RDPWrap.vcxproj `
+              /p:Configuration=Release `
+              /p:Platform="$platform" `
+              /p:PlatformToolset=v143 `
+              /p:WindowsTargetPlatformVersion=10.0 `
+              /v:minimal
+          }
+          Copy-Item src-x86-x64-Fusix/Release/x64/rdpwrap.dll   .\rdpwrap_x64.dll
+          Copy-Item src-x86-x64-Fusix/Release/x86/rdpwrap.dll   .\rdpwrap_x86.dll
+          Copy-Item src-x86-x64-Fusix/Release/arm64/rdpwrap.dll .\rdpwrap_arm64.dll
+          Write-Host "Built DLLs:"
+          Get-Item .\rdpwrap_x64.dll, .\rdpwrap_x86.dll, .\rdpwrap_arm64.dll | Format-Table Name, Length
+
+      - name: Upload rdpwrap DLLs
+        uses: actions/upload-artifact@v4
+        with:
+          name: rdpwrap-dlls
+          path: |
+            rdpwrap_x64.dll
+            rdpwrap_x86.dll
+            rdpwrap_arm64.dll
+          if-no-files-found: error
+
+
+  # ── Job 2: Build RDPWrapOffsetFinder (x64, x86) — parallel to build-dll ───
+  # No job dependencies — starts immediately.
+  build-offsetfinder:
+    name: Build OffsetFinder
+    runs-on: windows-2022
+    outputs:
+      finder_ver: ${{ steps.finder.outputs.finder_ver }}
+
+    steps:
+      - name: Checkout repository (with submodules)
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v3
+
+      - name: Build RDPWrapOffsetFinder from submodule
+        id: finder
+        shell: pwsh
+        run: |
+          $version = (git -C src-csharp/RDPOffsetFinder describe --tags --always).Trim()
+          Write-Host "Submodule version: $version"
+
+          foreach ($cfg in @(
+            @{ Platform = 'x64';   ZydisCfg = 'Release MD DLL'; ZydisBin = 'ReleaseX64'; Arch = 'x64'  }
+            @{ Platform = 'Win32'; ZydisCfg = 'Release MD DLL'; ZydisBin = 'ReleaseX86'; Arch = 'x86'  }
+          )) {
+            # Build Zydis DLL
+            msbuild src-csharp/RDPOffsetFinder/zydis/msvc/zydis/Zydis.vcxproj `
+              /p:Configuration="$($cfg.ZydisCfg)" `
+              /p:Platform="$($cfg.Platform)" `
+              /p:PlatformToolset=v143 `
+              /v:minimal
+
+            # Build RDPWrapOffsetFinder
+            msbuild src-csharp/RDPOffsetFinder/RDPWrapOffsetFinder/RDPWrapOffsetFinder.vcxproj `
+              /p:Configuration=Release `
+              /p:Platform="$($cfg.Platform)" `
+              /p:PlatformToolset=v143 `
+              /v:minimal
+
+            $arch   = $cfg.Arch
+            $exeSrc = "src-csharp/RDPOffsetFinder/RDPWrapOffsetFinder/$($cfg.Platform)/Release/RDPWrapOffsetFinder.exe"
+            $dllSrc = "src-csharp/RDPOffsetFinder/zydis/msvc/bin/$($cfg.ZydisBin)/Zydis.dll"
+            Copy-Item $exeSrc ".\RDPWrapOffsetFinder_$arch.exe"
+            Copy-Item $dllSrc ".\Zydis_$arch.dll"
+          }
+
+          Write-Host "Built finder tools (version $version):"
+          Get-Item .\RDPWrapOffsetFinder_*.exe, .\Zydis_*.dll | Format-Table Name, Length
+
+          echo "finder_ver=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Upload OffsetFinder binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: offsetfinder-binaries
+          path: |
+            RDPWrapOffsetFinder_x64.exe
+            RDPWrapOffsetFinder_x86.exe
+            Zydis_x64.dll
+            Zydis_x86.dll
+          if-no-files-found: error
+
+
+  # ── Job 3: Download rdpWrapper GUI from sergiye — parallel to build-dll ────
+  # No job dependencies — starts immediately.
+  download-sergiye:
+    name: Download sergiye rdpWrapper
+    runs-on: windows-2022
+    outputs:
+      wrapper_ver: ${{ steps.wrapper.outputs.wrapper_ver }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Download rdpWrapper (sergiye)
+        id: wrapper
+        shell: pwsh
+        run: |
+          $apiUrl  = "https://api.github.com/repos/sergiye/rdpWrapper/releases/latest"
+          $release = Invoke-RestMethod -Uri $apiUrl -Headers @{ "User-Agent" = "rdpwrap-ci" }
+
+          foreach ($arch in @('x64', 'x86')) {
+            $asset = $release.assets |
+              Where-Object { $_.name -eq "rdpWrapper_$arch.exe" } |
+              Select-Object -First 1
+            if (-not $asset) {
+              throw "Could not find rdpWrapper_$arch.exe in sergiye release $($release.tag_name)"
+            }
+            Write-Host "Downloading $($asset.browser_download_url)"
+            Invoke-WebRequest -Uri $asset.browser_download_url -OutFile ".\rdpWrapper_$arch.exe"
+          }
+
+          Write-Host "Wrapper exes:"
+          Get-Item .\rdpWrapper_x64.exe, .\rdpWrapper_x86.exe | Format-Table Name, Length
+          echo "wrapper_ver=$($release.tag_name)" >> $env:GITHUB_OUTPUT
+
+      # ── SHA-256 audit log for third-party binaries ──────────────────────────
+      # Records the hash of every downloaded sergiye binary in the workflow log.
+      # This provides a tamper-evident paper trail without blocking the release.
+      - name: Audit SHA-256 of downloaded binaries
+        shell: pwsh
+        run: |
+          $files = Get-Item .\rdpWrapper_x64.exe, .\rdpWrapper_x86.exe
+          Write-Host "SHA-256 audit (third-party downloads from sergiye/rdpWrapper):"
+          foreach ($f in $files) {
+            $hash = (Get-FileHash $f.FullName -Algorithm SHA256).Hash
+            Write-Host "  $($f.Name)  $hash"
+          }
+
+      # ── Verify hashes against pinned values in tools/sergiye-hashes.json ────
+      # If the file contains a non-empty 'release' key, hashes must match exactly.
+      # If 'release' is empty this step is skipped (bootstrap scenario).
+      - name: Verify sergiye binary hashes
+        shell: pwsh
+        run: |
+          $pinFile = 'tools/sergiye-hashes.json'
+          $pin = Get-Content $pinFile -Raw | ConvertFrom-Json
+          if ([string]::IsNullOrEmpty($pin.release)) {
+            Write-Host "Hash pinning not yet configured (tools/sergiye-hashes.json 'release' is empty) — skipping."
+            Write-Host "To enable pinning: download the binaries, compute hashes with Get-FileHash, and update $pinFile."
+          } else {
+            Write-Host "Verifying against pinned release: $($pin.release)"
+            $pass = $true
+            foreach ($name in @('rdpWrapper_x64.exe', 'rdpWrapper_x86.exe')) {
+              $expected = $pin.$name
+              $actual   = (Get-FileHash ".\$name" -Algorithm SHA256).Hash
+              if ($actual -ne $expected) {
+                Write-Error "Hash mismatch for $name!"
+                Write-Error "  Expected: $expected"
+                Write-Error "  Actual:   $actual"
+                $pass = $false
+              } else {
+                Write-Host "  $name  OK  ($actual)"
+              }
+            }
+            if (-not $pass) { throw "One or more sergiye binary hashes did not match the pinned values." }
+          }
+
+      - name: Upload sergiye wrappers
+        uses: actions/upload-artifact@v4
+        with:
+          name: sergiye-wrappers
+          path: |
+            rdpWrapper_x64.exe
+            rdpWrapper_x86.exe
+          if-no-files-found: error
+
+
+  # ── Job 4: Build C# tools (FD + SC) — waits for build-dll ────────────────
+  # Waits for build-dll so the DLLs can be embedded into single-file EXEs.
+  build-csharp:
+    name: Build C# Tools
+    runs-on: windows-2022
+    needs: [build-dll]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Download rdpwrap DLLs
+        uses: actions/download-artifact@v4
+        with:
+          name: rdpwrap-dlls
+          path: .
+
+      # Stage embedded resources for RDPWInst offline/bundled mode.
+      # RDPWInst.csproj embeds these files when present (Condition="Exists(...)").
+      # Copying them here ensures the single-file EXE can install without network.
+      - name: Stage RDPWInst embedded resources
+        shell: pwsh
+        run: |
+          $res = 'src-csharp/RDPWInst/Resources'
+          New-Item -ItemType Directory -Path $res -Force | Out-Null
+          Copy-Item .\rdpwrap_x86.dll  "$res\rdpw32.dll"  -Force
+          Copy-Item .\rdpwrap_x64.dll  "$res\rdpw64.dll"  -Force
+          Copy-Item msi\rdpwrap.ini    "$res\rdpwrap.ini"  -Force
+          Copy-Item LICENSE            "$res\license.txt"  -Force
+          Write-Host "Staged resources:"
+          Get-ChildItem $res | Format-Table Name, Length
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/Directory.Build.props', '**/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      # Compute version once so it's consistent across all publish and sign steps
+      - name: Get build version
+        id: build_ver
+        shell: pwsh
+        run: |
+          $v = Get-Date -Format "yyyy.M.d"
+          echo "version=$v" >> $env:GITHUB_OUTPUT
+          Write-Host "Build version: $v"
+
+      # ── Build framework-dependent variants ──────────────────────────────────
+      - name: Publish C# tools (x64, x86, arm64)
+        shell: pwsh
+        env:
+          DOTNET_NOLOGO: true
+          DOTNET_CLI_TELEMETRY_OPTOUT: true
+        run: |
+          $projects = @('RDPWInst', 'RDPConf', 'RDPCheck')
+          $rids     = [ordered]@{ x64 = 'win-x64'; x86 = 'win-x86'; arm64 = 'win-arm64' }
+          $ver      = '${{ steps.build_ver.outputs.version }}'
+          foreach ($proj in $projects) {
+            foreach ($plat in $rids.Keys) {
+              $rid = $rids[$plat]
+              dotnet publish "src-csharp/$proj/$proj.csproj" `
+                -c Release `
+                -r $rid `
+                -p:Platform=$plat `
+                -p:PublishSingleFile=true `
+                -p:SelfContained=false `
+                -p:Version=$ver `
+                -p:AssemblyVersion="$ver.0" `
+                -p:FileVersion="$ver.0" `
+                --output "dist_cs\$plat\$proj"
+              Copy-Item "dist_cs\$plat\$proj\$proj.exe" ".\${proj}_${plat}.exe"
+            }
+          }
+          Write-Host "C# tool executables:"
+          Get-Item .\RDPWInst_*.exe, .\RDPConf_*.exe, .\RDPCheck_*.exe | Format-Table Name, Length
+
+      # ── Build self-contained variants (no .NET runtime required) ─────────────
+      # Self-contained exes are larger (~60 MB) but work without a .NET install.
+      # Suffixed with _sc to distinguish from the framework-dependent versions.
+      - name: Publish self-contained C# tools (x64, x86, arm64)
+        shell: pwsh
+        env:
+          DOTNET_NOLOGO: true
+          DOTNET_CLI_TELEMETRY_OPTOUT: true
+        run: |
+          $projects = @('RDPWInst', 'RDPConf', 'RDPCheck')
+          $rids     = [ordered]@{ x64 = 'win-x64'; x86 = 'win-x86'; arm64 = 'win-arm64' }
+          $ver      = '${{ steps.build_ver.outputs.version }}'
+          foreach ($proj in $projects) {
+            foreach ($plat in $rids.Keys) {
+              $rid = $rids[$plat]
+              dotnet publish "src-csharp/$proj/$proj.csproj" `
+                -c Release `
+                -r $rid `
+                -p:Platform=$plat `
+                -p:PublishSingleFile=true `
+                -p:SelfContained=true `
+                -p:Version=$ver `
+                -p:AssemblyVersion="$ver.0" `
+                -p:FileVersion="$ver.0" `
+                --output "dist_cs_sc\$plat\$proj"
+              Copy-Item "dist_cs_sc\$plat\$proj\$proj.exe" ".\${proj}_${plat}_sc.exe"
+            }
+          }
+          Write-Host "Self-contained executables:"
+          Get-Item .\RDPWInst_*_sc.exe, .\RDPConf_*_sc.exe, .\RDPCheck_*_sc.exe | Format-Table Name, Length
+
+      # ── Optional: code-sign all C# executables ──────────────────────────────
+      # Enable by setting repository variable USE_CERT_SIGNING=true and adding
+      # secrets CODESIGN_CERT_BASE64 (PFX as base64) and CODESIGN_CERT_PASSWORD.
+      - name: Sign C# executables
+        if: vars.USE_CERT_SIGNING == 'true'
+        env:
+          CODESIGN_CERT_BASE64: ${{ secrets.CODESIGN_CERT_BASE64 }}
+          CODESIGN_CERT_PASSWORD: ${{ secrets.CODESIGN_CERT_PASSWORD }}
+        shell: pwsh
+        run: |
+          $pfxPath = "$env:RUNNER_TEMP\codesign.pfx"
+          [IO.File]::WriteAllBytes($pfxPath,
+            [Convert]::FromBase64String($env:CODESIGN_CERT_BASE64))
+          $signtool = (Resolve-Path "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" |
+                       Sort-Object | Select-Object -Last 1).Path
+          # Sign both framework-dependent and self-contained variants (glob picks up all _*.exe files)
+          $exes = Get-Item .\RDPWInst_*.exe, .\RDPConf_*.exe, .\RDPCheck_*.exe
+          foreach ($exe in $exes) {
+            & $signtool sign /fd SHA256 /f $pfxPath `
+              /p $env:CODESIGN_CERT_PASSWORD `
+              /tr http://timestamp.digicert.com /td SHA256 $exe.FullName
+          }
+          Remove-Item $pfxPath -Force
+
+      - name: Upload C# tools
+        uses: actions/upload-artifact@v4
+        with:
+          name: csharp-tools
+          path: |
+            RDPWInst_*.exe
+            RDPConf_*.exe
+            RDPCheck_*.exe
+          if-no-files-found: error
+
+
+  # ── Job 5: Build MSI packages — waits for build-csharp (implies build-dll) ─
+  build-msi:
+    name: Build MSI Packages
+    runs-on: windows-2022
+    needs: [build-csharp]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Download rdpwrap DLLs
+        uses: actions/download-artifact@v4
+        with:
+          name: rdpwrap-dlls
+          path: .
+
+      - name: Download C# tools
+        uses: actions/download-artifact@v4
+        with:
+          name: csharp-tools
+          path: .
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+
+      - name: Cache NuGet packages (WiX restore)
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('msi/global.json', 'msi/*.wixproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      # Get version (same formula as build-csharp for filename consistency)
+      - name: Get build version
+        id: build_ver
+        shell: pwsh
+        run: |
+          $v = Get-Date -Format "yyyy.M.d"
+          echo "version=$v" >> $env:GITHUB_OUTPUT
+          Write-Host "Build version: $v"
+
+      # ── Build MSI installers (WiX v5, x64 / x86 / arm64) ──────────────────
+      - name: Build MSI packages
+        shell: pwsh
+        run: |
+          $ver = '${{ steps.build_ver.outputs.version }}'
+          foreach ($arch in @('x64', 'x86', 'arm64')) {
+            # Stage arch-specific inputs next to the .wixproj
+            Copy-Item ".\rdpwrap_$arch.dll"  "msi\rdpwrap_$arch.dll"  -Force
+            Copy-Item ".\RDPWInst_$arch.exe" "msi\RDPWInst_$arch.exe" -Force
+            Copy-Item ".\RDPConf_$arch.exe"  "msi\RDPConf_$arch.exe"  -Force
+            Copy-Item ".\RDPCheck_$arch.exe" "msi\RDPCheck_$arch.exe" -Force
+
+            dotnet build msi/RDPWInst.wixproj `
+              -c Release `
+              /p:Platform=$arch `
+              /p:OutputName="RDPWrapper-$arch" `
+              /p:PackageVersion=$ver `
+              /p:OutputPath="$PWD/msi_out/$arch"
+            if ($LASTEXITCODE -ne 0) { throw "WiX build failed for $arch" }
+
+            $msiSrc = Get-Item "msi_out\$arch\RDPWrapper-$arch.msi" -ErrorAction SilentlyContinue
+            if (-not $msiSrc) {
+              $msiSrc = Get-ChildItem "msi\bin" -Recurse -Filter "RDPWrapper-$arch.msi" |
+                        Sort-Object LastWriteTime -Descending | Select-Object -First 1
+            }
+            if (-not $msiSrc) { throw "Could not locate RDPWrapper-$arch.msi after WiX build" }
+            Copy-Item $msiSrc.FullName ".\RDPWrapper-${ver}-$arch.msi"
+            Write-Host "Produced: RDPWrapper-${ver}-$arch.msi  ($([math]::Round($msiSrc.Length/1MB,1)) MB)"
+          }
+          Write-Host "MSI packages:"
+          Get-Item .\RDPWrapper-*-*.msi | Format-Table Name, Length
+
+      # ── Optional: sign the MSI packages ────────────────────────────────────
+      # Enable by setting repository variable USE_CERT_SIGNING=true and adding
+      # secrets CODESIGN_CERT_BASE64 (PFX as base64) and CODESIGN_CERT_PASSWORD.
+      - name: Sign MSI packages
+        if: vars.USE_CERT_SIGNING == 'true'
+        env:
+          CODESIGN_CERT_BASE64: ${{ secrets.CODESIGN_CERT_BASE64 }}
+          CODESIGN_CERT_PASSWORD: ${{ secrets.CODESIGN_CERT_PASSWORD }}
+        shell: pwsh
+        run: |
+          $pfxPath = "$env:RUNNER_TEMP\codesign.pfx"
+          [IO.File]::WriteAllBytes($pfxPath,
+            [Convert]::FromBase64String($env:CODESIGN_CERT_BASE64))
+          $signtool = (Resolve-Path "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" |
+                       Sort-Object | Select-Object -Last 1).Path
+          foreach ($msi in (Get-Item .\RDPWrapper-*-*.msi)) {
+            & $signtool sign /fd SHA256 /f $pfxPath `
+              /p $env:CODESIGN_CERT_PASSWORD `
+              /tr http://timestamp.digicert.com /td SHA256 `
+              $msi.FullName
+          }
+          Remove-Item $pfxPath -Force
+
+      - name: Upload MSI packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: msi-packages
+          path: RDPWrapper-*-*.msi
+          if-no-files-found: error
+
+
+  # ── Job 6: Publish GitHub Release — waits for all build jobs ──────────────
+  release:
+    name: Publish Release
+    runs-on: windows-2022
+    needs: [build-dll, build-csharp, build-offsetfinder, download-sergiye, build-msi]
+    # Attach to the 'release' GitHub Environment so repository admins can add
+    # required-reviewer gates in Settings → Environments → release.
+    # If the environment doesn't exist yet it will be created without gates.
+    environment: release
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Download rdpwrap DLLs
+        uses: actions/download-artifact@v4
+        with:
+          name: rdpwrap-dlls
+          path: .
+
+      - name: Download C# tools
+        uses: actions/download-artifact@v4
+        with:
+          name: csharp-tools
+          path: .
+
+      - name: Download OffsetFinder binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: offsetfinder-binaries
+          path: .
+
+      - name: Download sergiye wrappers
+        uses: actions/download-artifact@v4
+        with:
+          name: sergiye-wrappers
+          path: .
+
+      - name: Download MSI packages
+        uses: actions/download-artifact@v4
+        with:
+          name: msi-packages
+          path: .
+
+      - name: Verify all release assets are present
+        shell: pwsh
+        run: |
+          $required = @(
+            'rdpwrap_x64.dll', 'rdpwrap_x86.dll', 'rdpwrap_arm64.dll',
+            'RDPWInst_x64.exe', 'RDPWInst_x86.exe', 'RDPWInst_arm64.exe',
+            'RDPConf_x64.exe',  'RDPConf_x86.exe',  'RDPConf_arm64.exe',
+            'RDPCheck_x64.exe', 'RDPCheck_x86.exe',  'RDPCheck_arm64.exe',
+            'RDPWrapOffsetFinder_x64.exe', 'RDPWrapOffsetFinder_x86.exe',
+            'Zydis_x64.dll', 'Zydis_x86.dll',
+            'rdpWrapper_x64.exe', 'rdpWrapper_x86.exe'
+          )
+          $missing = $required | Where-Object { -not (Test-Path $_) }
+          if ($missing) {
+            throw "Missing required release assets: $($missing -join ', ')"
+          }
+          Write-Host "All required assets present."
+          Get-ChildItem *.exe, *.dll, *.msi | Format-Table Name, Length
+
+      # ── Extract the date string used for tagging and the updated field ───────
+      - name: Get release metadata
+        id: meta
+        shell: pwsh
+        run: |
+          $date  = Get-Date -Format "yyyy.MM.dd.HHmm"
+          $stamp = Get-Date -Format "yyyy-MM-dd HH:mm UTC"
+
+          # Pull the Updated= line out of the INI to surface in release notes
+          $iniContent = Get-Content msi/rdpwrap.ini -Raw
+          $iniDate    = if ($iniContent -match 'Updated=([^\r\n]+)') { $Matches[1] } else { 'unknown' }
+
+          echo "date=$date"       >> $env:GITHUB_OUTPUT
+          echo "stamp=$stamp"     >> $env:GITHUB_OUTPUT
+          echo "inidate=$iniDate" >> $env:GITHUB_OUTPUT
+
+      # ── Validate the INI has required sections and mandatory per-version keys ─
+      - name: Validate INI
+        shell: pwsh
+        run: |
+          $ini   = Get-Content msi/rdpwrap.ini -Raw
+          $lines = Get-Content msi/rdpwrap.ini
+
+          # 1) Check mandatory top-level sections exist
+          foreach ($section in @('[Main]', '[SLPolicy]', '[PatchCodes]')) {
+            if ($ini -notmatch [regex]::Escape($section)) {
+              throw "INI validation failed: missing required section $section"
+            }
+          }
+
+          # 2) Parse every Windows-version section and verify it contains the
+          #    mandatory keys LocalOnlyPatch and SLInitHook.
+          $sectionKeys    = [System.Collections.Generic.Dictionary[string, System.Collections.Generic.List[string]]]::new()
+          $currentSection = $null
+
+          foreach ($line in $lines) {
+            if ($line -match '^\[(\d[\d\.]+)\]') {
+              $currentSection = $Matches[1]
+              $sectionKeys[$currentSection] = [System.Collections.Generic.List[string]]::new()
+            } elseif ($null -ne $currentSection -and $line -match '^([A-Za-z][A-Za-z0-9_]*)[\s]*=') {
+              $sectionKeys[$currentSection].Add($Matches[1])
+            }
+          }
+
+          $mandatoryKeys = @('LocalOnlyPatch', 'SLInitHook')
+          $errors        = [System.Collections.Generic.List[string]]::new()
+
+          foreach ($sec in $sectionKeys.Keys) {
+            foreach ($key in $mandatoryKeys) {
+              if (-not $sectionKeys[$sec].Contains($key)) {
+                $errors.Add("  Section [$sec] is missing mandatory key: $key")
+              }
+            }
+          }
+
+          if ($errors.Count -gt 0) {
+            Write-Error "INI mandatory-key check failed ($($errors.Count) issue(s)):"
+            $errors | ForEach-Object { Write-Error $_ }
+            throw "INI validation failed — see errors above."
+          }
+
+          $sectionCount = $sectionKeys.Count
+          Write-Host "INI is valid. Windows-version sections: $sectionCount (all contain LocalOnlyPatch + SLInitHook)"
+
+      # ── Auto-generate changelog from merged PRs since last release ───────────
+      - name: Generate changelog
+        id: changelog
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Get the tag of the previous release so we can scope the PR list
+          $prevTag = (gh release list --limit 1 --json tagName --jq '.[0].tagName' 2>$null) ?? ''
+          if ($prevTag) {
+            Write-Host "Generating changelog since: $prevTag"
+            $since = gh release view $prevTag --json publishedAt --jq .publishedAt
+            $prs   = gh pr list --state merged --base main --search "merged:>=$since" `
+                       --json number,title,author --limit 50 | ConvertFrom-Json
+          } else {
+            Write-Host "No previous release found; skipping per-PR changelog."
+            $prs = @()
+          }
+          if ($prs.Count -gt 0) {
+            $lines = $prs | ForEach-Object { "- #$($_.number) $($_.title) (@$($_.author.login))" }
+            $body  = $lines -join "`n"
+          } else {
+            $body  = "_No merged pull requests found since the previous release._"
+          }
+          # Write multi-line output safely
+          $delim = [guid]::NewGuid().ToString('N')
+          echo "prs<<$delim"   >> $env:GITHUB_OUTPUT
+          echo $body           >> $env:GITHUB_OUTPUT
+          echo $delim          >> $env:GITHUB_OUTPUT
+
+      # ── Assemble the three user-facing distribution bundles ──────────────────
+      - name: Create distribution bundles
+        shell: pwsh
+        run: |
+          # RDPWrapper.zip - complete install package (all arches, framework-dependent)
+          $d = ".\bundle_wrapper"
+          New-Item -ItemType Directory -Path $d -Force | Out-Null
+          Copy-Item .\rdpwrap_x64.dll    "$d\rdpwrap_x64.dll"
+          Copy-Item .\rdpwrap_x86.dll    "$d\rdpwrap_x86.dll"
+          Copy-Item .\rdpwrap_arm64.dll  "$d\rdpwrap_arm64.dll"
+          Copy-Item .\rdpWrapper_x64.exe "$d\rdpWrapper_x64.exe"
+          Copy-Item .\rdpWrapper_x86.exe "$d\rdpWrapper_x86.exe"
+          # Framework-dependent C# tools (require .NET 10 Desktop Runtime)
+          foreach ($proj in @('RDPWInst', 'RDPConf', 'RDPCheck')) {
+            foreach ($arch in @('x64', 'x86', 'arm64')) {
+              $src = ".\${proj}_${arch}.exe"
+              if (Test-Path $src) { Copy-Item $src "$d\${proj}_${arch}.exe" }
+            }
+          }
+          Copy-Item msi\rdpwrap.ini   "$d\rdpwrap.ini"
+          Compress-Archive -Path "$d\*" -DestinationPath ".\RDPWrapper.zip" -Force
+          Remove-Item $d -Recurse -Force
+
+          # RDPWrapper-SelfContained.zip - apps bundled with .NET runtime (~60 MB each)
+          $sc = ".\bundle_sc"
+          New-Item -ItemType Directory -Path $sc -Force | Out-Null
+          foreach ($proj in @('RDPWInst', 'RDPConf', 'RDPCheck')) {
+            foreach ($arch in @('x64', 'x86', 'arm64')) {
+              $src = ".\${proj}_${arch}_sc.exe"
+              if (Test-Path $src) { Copy-Item $src "$sc\${proj}_${arch}_sc.exe" }
+            }
+          }
+          Copy-Item msi\rdpwrap.ini "$sc\rdpwrap.ini"
+          Compress-Archive -Path "$sc\*" -DestinationPath ".\RDPWrapper-SelfContained.zip" -Force
+          Remove-Item $sc -Recurse -Force
+
+          # RDPWrapOffsetFinder.zip - offset finder with per-arch subfolders
+          $f = ".\bundle_finder"
+          foreach ($arch in @('x64', 'x86')) {
+            $dir = "$f\$arch"
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+            Copy-Item ".\RDPWrapOffsetFinder_$arch.exe" "$dir\RDPWrapOffsetFinder.exe"
+            Copy-Item ".\Zydis_$arch.dll"               "$dir\Zydis.dll"
+          }
+          Compress-Archive -Path "$f\*" -DestinationPath ".\RDPWrapOffsetFinder.zip" -Force
+          Remove-Item $f -Recurse -Force
+
+          Write-Host "Distribution bundles:"
+          Get-Item .\RDPWrapper.zip, .\RDPWrapper-SelfContained.zip, .\RDPWrapOffsetFinder.zip | Format-Table Name, Length
+
+      # ── Create/update a versioned GitHub Release with all assets ─────────────
+      - name: Publish release
+        # Pinned to v2 tag SHA for supply-chain safety.
+        # Bump this SHA when upgrading: https://github.com/softprops/action-gh-release/releases
+        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe  # v2
+        with:
+          tag_name: "ini-${{ steps.meta.outputs.date }}"
+          name: "INI Update ${{ steps.meta.outputs.date }}"
+          prerelease: false
+          make_latest: true
+          body: |
+            ## RDP Wrapper - Automated Release
+
+            | Field | Value |
+            |---|---|
+            | INI `Updated` date | `${{ steps.meta.outputs.inidate }}` |
+            | Published | ${{ steps.meta.outputs.stamp }} |
+            | rdpWrapper (sergiye) | ${{ needs.download-sergiye.outputs.wrapper_ver }} |
+            | RDPWrapOffsetFinder (llccd) | ${{ needs.build-offsetfinder.outputs.finder_ver }} |
+
+            > **Framework-dependent tools** (default) require **.NET 10 Desktop Runtime** on the target machine.
+            > Download: https://dotnet.microsoft.com/download/dotnet/10.0
+            > For environments without a runtime install, use the `*_sc.exe` files from `RDPWrapper-SelfContained.zip`.
+
+            ### Downloads
+
+            | File | Contents | Use |
+            |---|---|---|
+            | `RDPWrapper.zip` | rdpwrap DLLs, C# tools (x64/x86/arm64), rdpWrapper GUI, rdpwrap.ini | **Main install package** — extract and run `RDPWInst_x64.exe -i -o` (or matching arch) |
+            | `RDPWrapper-SelfContained.zip` | Same C# tools bundled with .NET runtime (no separate runtime install needed) | Use when .NET 10 Desktop Runtime cannot be deployed |
+            | `RDPWrapper-<ver>-x64.msi` / `x86` / `arm64` | Windows Installer packages — GUI-friendly, self-registering uninstall | Preferred for managed/enterprise deployments |
+            | `RDPWrapOffsetFinder.zip` | RDPWrapOffsetFinder.exe + Zydis.dll for x64 and x86 | Generate offsets for an unknown termsrv.dll version manually |
+
+            ### Merged pull requests
+
+            ${{ steps.changelog.outputs.prs }}
+
+            ### Individual loose files (used by the automated installer)
+
+            | File | Purpose |
+            |---|---|
+            | `rdpwrap.ini` | Offset database fetched automatically by the installer |
+            | `RDPWrapOffsetFinder_x64.exe` / `Zydis_x64.dll` | Loose x64 binaries downloaded by `TryAutoGenerateOffsets` |
+            | `RDPWrapOffsetFinder_x86.exe` / `Zydis_x86.dll` | Loose x86 binaries downloaded by `TryAutoGenerateOffsets` |
+          files: |
+            RDPWrapper.zip
+            RDPWrapper-SelfContained.zip
+            RDPWrapper-*-x64.msi
+            RDPWrapper-*-x86.msi
+            RDPWrapper-*-arm64.msi
+            RDPWrapOffsetFinder.zip
+            msi/rdpwrap.ini
+            msi/rdpwrap-arm-kb.ini
+            rdpwrap_x64.dll
+            rdpwrap_x86.dll
+            rdpwrap_arm64.dll
+            RDPWInst_x64.exe
+            RDPWInst_x86.exe
+            RDPWInst_arm64.exe
+            RDPConf_x64.exe
+            RDPConf_x86.exe
+            RDPConf_arm64.exe
+            RDPCheck_x64.exe
+            RDPCheck_x86.exe
+            RDPCheck_arm64.exe
+            RDPWrapOffsetFinder_x64.exe
+            RDPWrapOffsetFinder_x86.exe
+            Zydis_x64.dll
+            Zydis_x86.dll

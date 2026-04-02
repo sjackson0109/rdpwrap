@@ -1,53 +1,58 @@
-# Phase 1 — Solution & Shared Library (RDPWrap.Common)
-Create src-csharp/ solution with four projects: RDPWrap.Common (class lib), RDPWInst (console), RDPConf (WinForms), RDPCheck (WinForms)
-NativeMethods.cs — all P/Invoke declarations: kernel32 (GetNativeSystemInfo, LoadLibraryEx, FindResource, Wow64Disable/RevertFsRedirection, CreateProcess, OpenProcess, TerminateProcess, CreateToolhelp32Snapshot, Thread32First/Next, OpenThread, SuspendThread/ResumeThread), advapi32 (all SCM + ACL + token functions), winsta.dll (WinStationEnumerateW, WinStationFreeMemory)
-RegistryHelper.cs — HKLM read/write helpers with KEY_WOW64_64KEY flag support for 64-bit hosts
-ServiceHelper.cs — OpenSCManager/OpenService/QueryServiceConfig/QueryServiceStatusEx/ChangeServiceConfig/StartService wrappers (or wrap System.ServiceProcess.ServiceController where sufficient)
-ArchHelper.cs — GetNativeSystemInfo-based arch detection + Wow64DisableWow64FsRedirection/RevertWow64FsRedirection helpers
-FileVersionHelper.cs — GetFileVersion via LoadLibraryEx + manual VS_VERSIONINFO parsing (or FileVersionInfo.GetVersionInfo())
-ProcessHelper.cs — ExecWait (hidden Process.Start + WaitForExit), KillProcess
-HttpHelper.cs — replace WinInet with HttpClient: DownloadStringAsync (for INI content), DownloadFileAsync (for binary assets)
-ResourceHelper.cs — Assembly.GetManifestResourceStream → extract to file path
-IniHelper.cs — INIHasSection(path, section) string search
-SecurityHelper.cs — ConvertStringSidToSid + SetEntriesInAcl + SetNamedSecurityInfo (grant SID full access), AddPrivilege (token privilege adjustment)
+# TODO
 
-# Phase 2 — RDPWInst (Console Installer)
-Argument parsing + main dispatch (/install, /uninstall, /update, /wraponly)
-CheckInstall() — verify TermService ImagePath (svchost) and ServiceDll (not third-party)
-CheckTermsrvProcess() — EnumServicesStatusEx loop to find TermService PID + co-hosted services; auto-start if PID=0
-CheckTermsrvDependencies() — ensure CertPropSvc and SessionEnv are not disabled
-CheckTermsrvVersion() — read termsrv.dll version, classify as unsupported / partial / full using built-in INI
-TSConfigRegistry(enable) — write fDenyTSConnections, EnableConcurrentSessions, AllowMultipleTSSessions, AllowRemoteRPC, EnableLinkedConnections
-ExtractFiles() — pull rdpw32/rdpw64, rdpclip, rfxvmt, config out of embedded resources; create install dir; set ACLs for S-1-5-18 and S-1-5-6
-SetWrapperDll() / ResetServiceDll() — write/restore ServiceDll registry value (REG_EXPAND_SZ); reg.exe workaround for Vista
-DeleteFiles() — remove rdpwrap.ini, rdpwrap.dll, install folder on uninstall
-GitINIFile() / DownloadFileToDisk() — HttpClient-based downloads from releases/latest/download/rdpwrap.ini
-TryAutoGenerateOffsets() — download RDPWrapOffsetFinder_x64/x86.exe + Zydis_x64/x86.dll, run via cmd.exe /c "... >> rdpwrap.ini", clean up temp files
-AddPrivilege() / KillProcess() / full install/uninstall/update orchestration wiring
-Embed binary resources (rdpw32.dll, rdpw64.dll, rdpclip*, rfxvmt*, rdpwrap.ini) into the .csproj as EmbeddedResource
-Add UAC app manifest: requestedExecutionLevel = requireAdministrator
+Items ordered by priority.
 
-# Phase 3 — RDPConf (WinForms Configuration GUI)
-MainForm layout — CheckBox (AllowTSConnections, SingleSessionPerUser, HideUsers, CustomPrg), two GroupBox+RadioButton clusters (NLA ×3, Shadow ×5), NumericUpDown for port, status Label pairs for Service/Listener/Wrapper/TS version/Wrapper version, OK/Cancel/Apply/License Button, System.Windows.Forms.Timer
-ReadSettings() — pull all values from HKLM\...\Terminal Server and RDP-Tcp registry keys into controls
-WriteSettings() — write all controls back to registry; on port change call netsh advfirewall firewall set rule name="Remote Desktop" new localport=…
-TimerTimer() — periodic refresh of all status labels (wrapper installed?, service state, listener active, file versions, support level)
-IsWrapperInstalled() / GetTermSrvState() (via ServiceController) / IsListenerWorking() (via WinStationEnumerateW)
-CheckSupport() — load rdpwrap.ini from install path, search for [major.minor.release.build] section
-LicenseForm — TextBox (multiline, readonly) populated from embedded LICENSE resource + Accept/Decline buttons
-FormCreate — arch detection, Wow64DisableWow64FsRedirection; FormClosed — RevertWow64FsRedirection; unsaved-changes guard on close
-UAC manifest + app.manifest (requireAdministrator)
+---
 
-# Phase 4 — RDPCheck (WinForms RDP Tester)
-Add COM interop reference for mstscax.dll (AxMSTSCLib) — either tlbimp-generated assembly or NuGet Microsoft.Rdp.Client
-MainForm layout — AxMsRdpClient2 ActiveX host filling the form
-FormLoad() — read then zero-out SecurityLayer/UserAuthentication in registry, read PortNumber, Sleep(1000), call .Connect()
-OnDisconnected() — full 50-entry reason-code → English string table (matching the Delphi source exactly), MessageBox for codes >2, restore SecurityLayer/UserAuthentication, Application.Exit()
-UAC manifest (requireAdministrator — needed for HKLM registry writes)
+## High priority
 
-# Phase 5 — Build & CI
-Directory.Build.props — shared <TargetFramework>net481</TargetFramework> (or net8.0-windows), <Platforms>x86;x64</Platforms>, <Nullable>enable</Nullable>, <ImplicitUsings>enable</ImplicitUsings>
-Update GitHub Actions workflows — replace Delphi compiler steps with dotnet build / dotnet publish -r win-x64 -r win-x86
-Remove Delphi compiler steps, Delphi CI caching, .dproj/.dfm artifact handling from all workflows
-Code-sign configuration — signtool.exe step in release workflow for all four output binaries
-Update README.md with new build prerequisites (.NET SDK), build commands, and note that Delphi is no longer required
+- [x] **Add `concurrency:` guard to `build-and-release.yml`** — two rapid pushes to `main` (e.g. a merge immediately followed by a Dependabot merge) will race and both attempt to create a release, corrupting or duplicating assets. Add:
+  ```yaml
+  concurrency:
+    group: release
+    cancel-in-progress: true
+  ```
+  at the top-level of the workflow so only one release job runs at a time.
+
+- [x] **Add `msi/**` to `build-and-release.yml` path filter** — changes to `msi/RDPWInst.wxs`, `msi/RDPWInst.wixproj`, or `msi/global.json` currently do not trigger a release. A WiX fix merged to `main` would silently produce no new release. Add `'msi/**'` to the `paths:` list.
+
+- [x] **Add NuGet / dotnet package cache** — every `build-and-release.yml` and `build-csharp.yml` run re-downloads all NuGet packages from scratch (~30–60 s penalty per run). Add an `actions/cache` step keyed on `**/packages.lock.json` or the project files hash before the `dotnet publish` steps to restore/save the `~/.nuget/packages` directory.
+
+- [x] **Add PR check for MSI build** — there is no CI validation that `msi/RDPWInst.wxs` / `msi/RDPWInst.wixproj` compiles when a PR changes them, only at release time. Create a lightweight `build-msi-check.yml` (or add a `pull_request` trigger to cover `msi/**`) that builds the WiX project without publishing a release.
+
+- [ ] **Code-sign release binaries** — set repository variable `USE_CERT_SIGNING=true` (Settings → Variables → Actions) and add `CODESIGN_CERT_BASE64` (PFX as base64) and `CODESIGN_CERT_PASSWORD` as repository secrets; both CI workflows with signing steps (`build-and-release.yml`, `build-csharp.yml`) already have the signing step wired up, gated on `vars.USE_CERT_SIGNING == 'true'`. See [`docs/CODE-SIGNING.md`](docs/CODE-SIGNING.md) for the full certificate acquisition, PFX export, and secret upload procedure.
+
+---
+
+## Medium priority
+
+- [x] **Add `CODEOWNERS` file** — create `.github/CODEOWNERS` mapping `src-x86-x64-Fusix/` and `src-csharp/` to `@sjackson0109` so PRs automatically request review from the maintainer. Optionally require approval before merging via branch protection rules.
+
+- [x] **Dynamic version in banner** — `Program.cs` banner hardcodes `"v1.6.2"`. Replace with a runtime read of the assembly version so released binaries automatically display the correct `yyyy.M.d` stamp:
+  ```csharp
+  var v = Assembly.GetExecutingAssembly().GetName().Version;
+  string version = v is null ? "unknown" : $"{v.Major}.{v.Minor}.{v.Build}";
+  ```
+
+- [x] **Update `Directory.Build.props` default version** — the fallback `<Version>2026.3.30</Version>` is already stale and will mislead developers who build locally without passing `/p:Version=`. Either update it to the current date periodically, or derive it dynamically:
+  ```xml
+  <Version>$([System.DateTime]::Now.ToString("yyyy.M.d"))</Version>
+  ```
+
+- [x] **Split `build-and-release.yml` into parallel jobs** — the ~500-line single job runs everything sequentially (DLL builds → C# publishes → self-contained publishes → OffsetFinder → sergiye download → MSI → release). Split into 6 jobs: `build-dll`, `build-offsetfinder`, `download-sergiye` (all parallel), then `build-csharp` (waits for DLLs), `build-msi` (waits for C#), and `release` (waits for all). Makes failures easy to identify at a glance.
+
+- [x] **Pin `softprops/action-gh-release` to a SHA** — Dependabot covers `actions/*` and NuGet packages but not third-party actions like `softprops/action-gh-release@v2`. Pinned to `153bb8e04406b158c6c84fc1615b65b24149a1fe` (v2) with `# v2` comment so Dependabot can track it via the existing `actions-minor` group.
+
+- [ ] **Add in-repo screenshots** — `docs/images/` directory and README scaffold are in place; five PNGs are committed but three additional shots would improve coverage. Capture the files described in [`docs/images/README.md`](docs/images/README.md) on a Windows 10/11 machine with a working install and commit them.
+
+---
+
+## Low priority
+
+- [x] **Add a GitHub Environment for releases** — configured `environment: release` on the `release` job in `build-and-release.yml`. The environment is created automatically if absent (no gates). To require a reviewer: Settings → Environments → release → Required reviewers → add `@sjackson0109`.
+
+- [x] **Dependabot for submodules** — `dependabot.yml` covers `github-actions` and `nuget` but not git submodules (`src-csharp/RDPOffsetFinder` / `zydis`). Added a `gitsubmodule` ecosystem entry (Dependabot beta); activate once the feature is publicly available or monitor submodule versions manually.
+
+- [x] **Add `packages.lock.json` for reproducible NuGet restores** — enabled `<RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>` in `Directory.Build.props`. Run `dotnet restore` locally in `src-csharp/` and commit the generated `packages.lock.json` files so CI restores become deterministic.
+
+- [x] **Lint `msi/rdpwrap.ini` in CI** — the existing INI validation step in `build-and-release.yml` checks for three required sections. Extended to also parse every `[x.x.xxxxx.xxxxx]` section and assert it contains `LocalOnlyPatch` and `SLInitHook`, reporting all failures at once before aborting.
