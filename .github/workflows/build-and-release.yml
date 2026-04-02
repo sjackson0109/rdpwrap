@@ -109,8 +109,8 @@ jobs:
           Write-Host "Submodule version: $version"
 
           foreach ($cfg in @(
-            @{ Platform = 'x64';   ZydisCfg = 'Release MD DLL'; ZydisBin = 'ReleaseX64'; Arch = 'x64'  }
-            @{ Platform = 'Win32'; ZydisCfg = 'Release MD DLL'; ZydisBin = 'ReleaseX86'; Arch = 'x86'  }
+            @{ Platform = 'x64';   SlnPlatform = 'x64'; ZydisCfg = 'Release MD DLL'; ZydisBin = 'ReleaseX64'; Arch = 'x64'  }
+            @{ Platform = 'Win32'; SlnPlatform = 'x86'; ZydisCfg = 'Release MD DLL'; ZydisBin = 'ReleaseX86'; Arch = 'x86'  }
           )) {
             # Build Zydis DLL
             msbuild src-csharp/RDPOffsetFinder/zydis/msvc/zydis/Zydis.vcxproj `
@@ -123,10 +123,11 @@ jobs:
             # where zydis/ lives - vcxproj AdditionalIncludeDirectories and
             # AdditionalDependencies both use $(SolutionDir)\zydis\... and
             # fail with C1083 when the vcxproj is targeted directly.
+            # NB: the solution uses x86/x64 platform names (not Win32) - use SlnPlatform.
             msbuild src-csharp/RDPOffsetFinder/RDPWrapOffsetFinder.sln `
               /t:RDPWrapOffsetFinder `
               /p:Configuration=Release `
-              /p:Platform="$($cfg.Platform)" `
+              /p:Platform="$($cfg.SlnPlatform)" `
               /p:PlatformToolset=v143 `
               /v:minimal
 
