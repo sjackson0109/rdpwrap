@@ -7,8 +7,6 @@
 on:
   pull_request:
     branches: [main, master]
-    paths:
-      - 'src-csharp/RDPOffsetFinder/**'
   push:
     tags:
       - 'v*'
@@ -55,11 +53,13 @@ jobs:
             /p:PlatformToolset=v143 `
             /v:minimal
 
-      # Build the offset finder (links against the Zydis import lib just produced)
+      # Build via .sln so $(SolutionDir) resolves to the submodule root where
+      # AdditionalIncludeDirectories and AdditionalDependencies reference zydis/
       - name: Build RDPWrapOffsetFinder (${{ matrix.platform }})
         working-directory: src-csharp/RDPOffsetFinder
         run: |
-          msbuild RDPWrapOffsetFinder\RDPWrapOffsetFinder.vcxproj `
+          msbuild RDPWrapOffsetFinder.sln `
+            /t:RDPWrapOffsetFinder `
             /p:Configuration=Release `
             /p:Platform="${{ matrix.platform }}" `
             /p:PlatformToolset=v143 `
@@ -70,7 +70,8 @@ jobs:
         run: |
           $arch  = if ("${{ matrix.platform }}" -eq "Win32") { "x86" } else { "x64" }
           $root  = "src-csharp/RDPOffsetFinder"
-          $exe   = "$root/RDPWrapOffsetFinder/${{ matrix.finder_plat }}/Release/RDPWrapOffsetFinder.exe"
+          # .sln build outputs to SolutionDir/<Platform>/Release/ (not <ProjectDir>/<Platform>/Release/)
+          $exe   = "$root/${{ matrix.finder_plat }}/Release/RDPWrapOffsetFinder.exe"
           $dll   = "$root/zydis/msvc/bin/${{ matrix.zydis_bin }}/Zydis.dll"
 
           Write-Host "Exe: $(Get-Item $exe | Select-Object -Exp Length) bytes"

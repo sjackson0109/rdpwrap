@@ -7,9 +7,6 @@ name: Build MSI Check
 on:
   pull_request:
     branches: [main, master]
-    paths:
-      - 'msi/**'
-      - '.github/workflows/build-msi-check.yml'
   workflow_dispatch:
 
 env:
