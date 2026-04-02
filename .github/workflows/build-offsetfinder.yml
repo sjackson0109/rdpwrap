@@ -68,6 +68,16 @@ jobs:
             /p:PlatformToolset=v143 `
             /v:minimal
 
+      - name: Locate build outputs (diagnostic)
+        shell: pwsh
+        run: |
+          Write-Host "=== RDPWrapOffsetFinder.exe candidates ==="
+          Get-ChildItem -Recurse -Filter "RDPWrapOffsetFinder.exe" -Path "src-csharp/RDPOffsetFinder" -ErrorAction SilentlyContinue |
+            Select-Object FullName, Length | Format-Table -AutoSize
+          Write-Host "=== Directory tree (Release folders only) ==="
+          Get-ChildItem -Recurse -Directory -Filter "Release" -Path "src-csharp/RDPOffsetFinder" -ErrorAction SilentlyContinue |
+            Select-Object FullName | Format-Table -AutoSize
+
       - name: Collect outputs
         shell: pwsh
         run: |
