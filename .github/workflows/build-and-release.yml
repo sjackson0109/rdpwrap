@@ -112,16 +112,17 @@ jobs:
             @{ Platform = 'x64';   ZydisCfg = 'Release MD DLL'; ZydisBin = 'ReleaseX64'; Arch = 'x64'  }
             @{ Platform = 'Win32'; ZydisCfg = 'Release MD DLL'; ZydisBin = 'ReleaseX86'; Arch = 'x86'  }
           )) {
-            # Build Zydis DLL directly (standalone vcxproj, no SolutionDir dependency)
+            # Build Zydis DLL
             msbuild src-csharp/RDPOffsetFinder/zydis/msvc/zydis/Zydis.vcxproj `
               /p:Configuration="$($cfg.ZydisCfg)" `
               /p:Platform="$($cfg.Platform)" `
               /p:PlatformToolset=v143 `
               /v:minimal
 
-            # Build RDPWrapOffsetFinder via the .sln so $(SolutionDir) resolves to
-            # the submodule root where zydis/ lives — the vcxproj AdditionalInclude-
-            # Directories use $(SolutionDir)\zydis\include and fail if built directly.
+            # Build RDPWrapOffsetFinder via the .sln so $(SolutionDir) resolves
+            # to the submodule root where zydis/ lives. Building the .vcxproj
+            # directly sets SolutionDir to the vcxproj folder, breaking all
+            # AdditionalIncludeDirectories and AdditionalDependencies paths.
             msbuild src-csharp/RDPOffsetFinder/RDPWrapOffsetFinder.sln `
               /t:RDPWrapOffsetFinder `
               /p:Configuration=Release `
