@@ -9,7 +9,6 @@ on:
       - 'msi/**'
       - 'src-x86-x64-Fusix/**'
       - 'src-csharp/**'
-      - '.github/workflows/build-and-release.yml'
   workflow_dispatch:
     inputs:
       tag:
@@ -23,7 +22,7 @@ on:
         default: false
 
 concurrency:
-  group: release
+  group: ${{ github.workflow }}-${{ github.ref_name }}
   cancel-in-progress: true
 
 env:
@@ -439,7 +438,9 @@ jobs:
       - name: Build MSI packages
         shell: pwsh
         run: |
-          $ver = '${{ steps.build_ver.outputs.version }}'
+          $ver    = '${{ steps.build_ver.outputs.version }}'
+          # MSI ProductVersion requires major<256; strip century: "2026.4.2" -> "26.4.2"
+          $msiVer = $ver.Substring(2)
           foreach ($arch in @('x64', 'x86', 'arm64')) {
             # Stage arch-specific inputs next to the .wixproj
             Copy-Item ".\rdpwrap_$arch.dll"  "msi\rdpwrap_$arch.dll"  -Force
@@ -451,7 +452,7 @@ jobs:
               -c Release `
               /p:Platform=$arch `
               /p:OutputName="RDPWrapper-$arch" `
-              /p:PackageVersion=$ver `
+              /p:PackageVersion=$msiVer `
               /p:OutputPath="$PWD/msi_out/$arch"
             if ($LASTEXITCODE -ne 0) { throw "WiX build failed for $arch" }
 
