@@ -26,7 +26,6 @@ The following screenshots would improve documentation coverage but are not block
 |---|---|
 | `RDPWrapperConfig-advanced.png` | RDPConf.exe Advanced / License tab — SL policy and licensing status fields |
 | `rdpwrapper-gui.png` | sergiye/rdpWrapper GUI — main window with connection status |
-| `install-success.png` | Terminal output of `RDPWInst_x64.exe -i -o` completing successfully |
 
 ---
 

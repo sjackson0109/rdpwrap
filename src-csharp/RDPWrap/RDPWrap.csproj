@@ -6,9 +6,8 @@
     <Description>Shared helper library (P/Invoke, registry, service, security helpers) for the RDP Wrapper tool suite.</Description>
   </PropertyGroup>
 
-  <!-- Grant all three consumer assemblies access to internal members (e.g. NativeMethods) -->
+  <!-- Grant consumer assemblies access to internal members (e.g. NativeMethods) -->
   <ItemGroup>
-    <InternalsVisibleTo Include="RDPWInst" />
     <InternalsVisibleTo Include="RDPConf" />
     <InternalsVisibleTo Include="RDPCheck" />
   </ItemGroup>

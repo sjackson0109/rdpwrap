@@ -31,7 +31,7 @@ body:
       label: Component this relates to
       options:
         - rdpwrap.dll (C++ wrapper library)
-        - RDPWInst / installer (Delphi)
+        - RDPConf / configuration GUI
         - rdpWrapper GUI (sergiye C# app)
         - rdpwrap.ini (offset database)
         - CI/CD pipelines

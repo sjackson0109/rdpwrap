@@ -530,8 +530,8 @@ internal sealed class MainForm : Form
     {
         var text = ResourceHelper.ReadText(
             "RDPConf.Resources.license.txt",
-            System.Reflection.Assembly.GetExecutingAssembly());
-        text ??= ResourceHelper.ReadText("RDPWInst.Resources.license.txt") ?? "(license not found)";
+            System.Reflection.Assembly.GetExecutingAssembly())
+            ?? "(license not found)";
 
         using var dlg = new LicenseForm(text);
         if (dlg.ShowDialog(this) != DialogResult.OK)

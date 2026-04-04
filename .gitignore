@@ -20,7 +20,6 @@ build/
 *.wixpdb
 msi/bin/
 msi/obj/
-msi_out/
 
 # Staged CI inputs inside msi/ (DLLs and EXEs copied there before WiX runs;
 # generated at build time — not source files)
@@ -30,11 +29,6 @@ msi/*.exe
 # C# build outputs
 src-csharp/**/bin/
 src-csharp/**/obj/
-# Staged resource: copied from msi/rdpwrap.ini at build time, not source
-src-csharp/RDPWInst/Resources/rdpwrap.ini
-src-csharp/RDPWInst/Resources/rdpw32.dll
-src-csharp/RDPWInst/Resources/rdpw64.dll
-src-csharp/RDPWInst/Resources/license.txt
 
 # C++ build outputs
 src-x86-x64-Fusix/Release/

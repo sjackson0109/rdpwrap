@@ -18,7 +18,7 @@ title: "[Idea] "
 
 <!-- Pick one or more:
 - rdpwrap.dll (C++ wrapper library)
-- RDPWInst / installer (Delphi)
+- MSI installer (WiX)
 - rdpWrapper GUI (sergiye C# app)
 - rdpwrap.ini (offset database)
 - CI/CD pipelines

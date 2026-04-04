@@ -39,12 +39,13 @@ jobs:
       # Create minimal placeholder files so WiX can resolve all File references
       # in RDPWInst.wxs without requiring an actual C++ or C# build.
       # WiX v5 harvests file size at build time but does not validate binary content.
+      # Note: RDPWInst_*.exe is NOT included — the MSI no longer bundles it.
       - name: Create placeholder binary inputs
         shell: pwsh
         run: |
           $arch = 'x64'
           # Placeholder DLL and EXEs — WiX only needs the files to exist
-          foreach ($name in @("rdpwrap_$arch.dll", "RDPWInst_$arch.exe", "RDPConf_$arch.exe", "RDPCheck_$arch.exe")) {
+          foreach ($name in @("rdpwrap_$arch.dll", "RDPConf_$arch.exe", "RDPCheck_$arch.exe")) {
             $dest = "msi\$name"
             if (-not (Test-Path $dest)) {
               [System.IO.File]::WriteAllBytes($dest, [byte[]](0x4D, 0x5A))  # MZ stub

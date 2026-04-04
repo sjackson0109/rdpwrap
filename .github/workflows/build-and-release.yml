@@ -258,21 +258,6 @@ jobs:
           name: rdpwrap-dlls
           path: .
 
-      # Stage embedded resources for RDPWInst offline/bundled mode.
-      # RDPWInst.csproj embeds these files when present (Condition="Exists(...)").
-      # Copying them here ensures the single-file EXE can install without network.
-      - name: Stage RDPWInst embedded resources
-        shell: pwsh
-        run: |
-          $res = 'src-csharp/RDPWInst/Resources'
-          New-Item -ItemType Directory -Path $res -Force | Out-Null
-          Copy-Item .\rdpwrap_x86.dll  "$res\rdpw32.dll"  -Force
-          Copy-Item .\rdpwrap_x64.dll  "$res\rdpw64.dll"  -Force
-          Copy-Item msi\rdpwrap.ini    "$res\rdpwrap.ini"  -Force
-          Copy-Item LICENSE            "$res\license.txt"  -Force
-          Write-Host "Staged resources:"
-          Get-ChildItem $res | Format-Table Name, Length
-
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
         with:
@@ -302,7 +287,7 @@ jobs:
           DOTNET_NOLOGO: true
           DOTNET_CLI_TELEMETRY_OPTOUT: true
         run: |
-          $projects = @('RDPWInst', 'RDPConf', 'RDPCheck')
+          $projects = @('RDPConf', 'RDPCheck')
           $rids     = [ordered]@{ x64 = 'win-x64'; x86 = 'win-x86'; arm64 = 'win-arm64' }
           $ver      = '${{ steps.build_ver.outputs.version }}'
           foreach ($proj in $projects) {
@@ -322,7 +307,7 @@ jobs:
             }
           }
           Write-Host "C# tool executables:"
-          Get-Item .\RDPWInst_*.exe, .\RDPConf_*.exe, .\RDPCheck_*.exe | Format-Table Name, Length
+          Get-Item .\RDPConf_*.exe, .\RDPCheck_*.exe | Format-Table Name, Length
 
       # ── Build self-contained variants (no .NET runtime required) ─────────────
       # Self-contained exes are larger (~60 MB) but work without a .NET install.
@@ -333,7 +318,7 @@ jobs:
           DOTNET_NOLOGO: true
           DOTNET_CLI_TELEMETRY_OPTOUT: true
         run: |
-          $projects = @('RDPWInst', 'RDPConf', 'RDPCheck')
+          $projects = @('RDPConf', 'RDPCheck')
           $rids     = [ordered]@{ x64 = 'win-x64'; x86 = 'win-x86'; arm64 = 'win-arm64' }
           $ver      = '${{ steps.build_ver.outputs.version }}'
           foreach ($proj in $projects) {
@@ -353,7 +338,7 @@ jobs:
             }
           }
           Write-Host "Self-contained executables:"
-          Get-Item .\RDPWInst_*_sc.exe, .\RDPConf_*_sc.exe, .\RDPCheck_*_sc.exe | Format-Table Name, Length
+          Get-Item .\RDPConf_*_sc.exe, .\RDPCheck_*_sc.exe | Format-Table Name, Length
 
       # ── Optional: code-sign all C# executables ──────────────────────────────
       # Enable by setting repository variable USE_CERT_SIGNING=true and adding
@@ -371,7 +356,7 @@ jobs:
           $signtool = (Resolve-Path "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" |
                        Sort-Object | Select-Object -Last 1).Path
           # Sign both framework-dependent and self-contained variants (glob picks up all _*.exe files)
-          $exes = Get-Item .\RDPWInst_*.exe, .\RDPConf_*.exe, .\RDPCheck_*.exe
+          $exes = Get-Item .\RDPConf_*.exe, .\RDPCheck_*.exe
           foreach ($exe in $exes) {
             & $signtool sign /fd SHA256 /f $pfxPath `
               /p $env:CODESIGN_CERT_PASSWORD `
@@ -384,7 +369,6 @@ jobs:
         with:
           name: csharp-tools
           path: |
-            RDPWInst_*.exe
             RDPConf_*.exe
             RDPCheck_*.exe
           if-no-files-found: error
@@ -442,29 +426,34 @@ jobs:
           # MSI ProductVersion requires major<256; strip century: "2026.4.2" -> "26.4.2"
           $msiVer = $ver.Substring(2)
           foreach ($arch in @('x64', 'x86', 'arm64')) {
-            # Stage arch-specific inputs next to the .wixproj
+            # Stage arch-specific inputs next to the .wixproj.
+            # The MSI implements all install/uninstall logic natively via WiX elements
+            # (registry, ServiceControl, firewall) — no helper EXE is bundled.
             Copy-Item ".\rdpwrap_$arch.dll"  "msi\rdpwrap_$arch.dll"  -Force
-            Copy-Item ".\RDPWInst_$arch.exe" "msi\RDPWInst_$arch.exe" -Force
             Copy-Item ".\RDPConf_$arch.exe"  "msi\RDPConf_$arch.exe"  -Force
             Copy-Item ".\RDPCheck_$arch.exe" "msi\RDPCheck_$arch.exe" -Force
 
+            $msiStaging = "msi_staging/$arch"
+            New-Item -Force -ItemType Directory $msiStaging | Out-Null
             dotnet build msi/RDPWInst.wixproj `
               -c Release `
               /p:Platform=$arch `
               /p:OutputName="RDPWrapper-$arch" `
               /p:PackageVersion=$msiVer `
-              /p:OutputPath="$PWD/msi_out/$arch"
+              /p:OutputPath="$PWD/$msiStaging"
             if ($LASTEXITCODE -ne 0) { throw "WiX build failed for $arch" }
 
-            $msiSrc = Get-Item "msi_out\$arch\RDPWrapper-$arch.msi" -ErrorAction SilentlyContinue
+            $msiSrc = Get-Item "$msiStaging/RDPWrapper-$arch.msi" -ErrorAction SilentlyContinue
             if (-not $msiSrc) {
-              $msiSrc = Get-ChildItem "msi\bin" -Recurse -Filter "RDPWrapper-$arch.msi" |
+              $msiSrc = Get-ChildItem $msiStaging -Recurse -Filter "RDPWrapper-$arch.msi" |
                         Sort-Object LastWriteTime -Descending | Select-Object -First 1
             }
             if (-not $msiSrc) { throw "Could not locate RDPWrapper-$arch.msi after WiX build" }
             Copy-Item $msiSrc.FullName ".\RDPWrapper-${ver}-$arch.msi"
             Write-Host "Produced: RDPWrapper-${ver}-$arch.msi  ($([math]::Round($msiSrc.Length/1MB,1)) MB)"
           }
+          # Clean up the WiX staging dirs (MSIs are already in the workspace root)
+          Remove-Item -Recurse -Force msi_staging -ErrorAction SilentlyContinue
           Write-Host "MSI packages:"
           Get-Item .\RDPWrapper-*-*.msi | Format-Table Name, Length
 
@@ -547,7 +536,6 @@ jobs:
         run: |
           $required = @(
             'rdpwrap_x64.dll', 'rdpwrap_x86.dll', 'rdpwrap_arm64.dll',
-            'RDPWInst_x64.exe', 'RDPWInst_x86.exe', 'RDPWInst_arm64.exe',
             'RDPConf_x64.exe',  'RDPConf_x86.exe',  'RDPConf_arm64.exe',
             'RDPCheck_x64.exe', 'RDPCheck_x86.exe',  'RDPCheck_arm64.exe',
             'RDPWrapOffsetFinder_x64.exe', 'RDPWrapOffsetFinder_x86.exe',
@@ -597,39 +585,44 @@ jobs:
             }
           }
 
-          # 2) Parse every Windows-version section and verify it contains the
-          #    mandatory keys LocalOnlyPatch and SLInitHook.
+          # 2) Parse every Windows-version section (excluding -SLInit subsections)
+          #    and verify it contains at least one patch implementation key.
+          #    Key names vary by OS generation:
+          #      Vista/7/8:   SingleUserPatch, DefPolicyPatch
+          #      Win10 22H2+: LocalOnlyPatch, SingleUserPatch, DefPolicyPatch, SLInitHook
+          #    All sections must have at least one *Patch* or SLInitHook entry to be
+          #    considered valid (empty sections indicate a broken or incomplete entry).
           $sectionKeys    = [System.Collections.Generic.Dictionary[string, System.Collections.Generic.List[string]]]::new()
           $currentSection = $null
 
           foreach ($line in $lines) {
-            if ($line -match '^\[(\d[\d\.]+)\]') {
+            # Match version sections but NOT -SLInit subsections
+            if ($line -match '^\[(\d[\d\.]+)\]$') {
               $currentSection = $Matches[1]
               $sectionKeys[$currentSection] = [System.Collections.Generic.List[string]]::new()
-            } elseif ($null -ne $currentSection -and $line -match '^([A-Za-z][A-Za-z0-9_]*)[\s]*=') {
+            } elseif ($null -ne $currentSection -and $line -match '^([A-Za-z][A-Za-z0-9_]*)[\.x0-9]*\s*=') {
               $sectionKeys[$currentSection].Add($Matches[1])
             }
           }
 
-          $mandatoryKeys = @('LocalOnlyPatch', 'SLInitHook')
-          $errors        = [System.Collections.Generic.List[string]]::new()
+          $errors = [System.Collections.Generic.List[string]]::new()
 
           foreach ($sec in $sectionKeys.Keys) {
-            foreach ($key in $mandatoryKeys) {
-              if (-not $sectionKeys[$sec].Contains($key)) {
-                $errors.Add("  Section [$sec] is missing mandatory key: $key")
-              }
+            $keys = $sectionKeys[$sec]
+            $hasPatchKey = $keys | Where-Object { $_ -match 'Patch$|SLInitHook$' }
+            if (-not $hasPatchKey) {
+              $errors.Add("  Section [$sec] has no patch implementation keys (SingleUserPatch / DefPolicyPatch / LocalOnlyPatch / SLInitHook)")
             }
           }
 
           if ($errors.Count -gt 0) {
-            Write-Error "INI mandatory-key check failed ($($errors.Count) issue(s)):"
+            Write-Error "INI validation failed ($($errors.Count) incomplete section(s)):"
             $errors | ForEach-Object { Write-Error $_ }
             throw "INI validation failed — see errors above."
           }
 
           $sectionCount = $sectionKeys.Count
-          Write-Host "INI is valid. Windows-version sections: $sectionCount (all contain LocalOnlyPatch + SLInitHook)"
+          Write-Host "INI is valid. Windows-version sections: $sectionCount (all contain at least one patch key)"
 
       # ── Auto-generate changelog from merged PRs since last release ───────────
       - name: Generate changelog
@@ -674,7 +667,7 @@ jobs:
           Copy-Item .\rdpWrapper_x64.exe "$d\rdpWrapper_x64.exe"
           Copy-Item .\rdpWrapper_x86.exe "$d\rdpWrapper_x86.exe"
           # Framework-dependent C# tools (require .NET 10 Desktop Runtime)
-          foreach ($proj in @('RDPWInst', 'RDPConf', 'RDPCheck')) {
+          foreach ($proj in @('RDPConf', 'RDPCheck')) {
             foreach ($arch in @('x64', 'x86', 'arm64')) {
               $src = ".\${proj}_${arch}.exe"
               if (Test-Path $src) { Copy-Item $src "$d\${proj}_${arch}.exe" }
@@ -687,7 +680,7 @@ jobs:
           # RDPWrapper-SelfContained.zip - apps bundled with .NET runtime (~60 MB each)
           $sc = ".\bundle_sc"
           New-Item -ItemType Directory -Path $sc -Force | Out-Null
-          foreach ($proj in @('RDPWInst', 'RDPConf', 'RDPCheck')) {
+          foreach ($proj in @('RDPConf', 'RDPCheck')) {
             foreach ($arch in @('x64', 'x86', 'arm64')) {
               $src = ".\${proj}_${arch}_sc.exe"
               if (Test-Path $src) { Copy-Item $src "$sc\${proj}_${arch}_sc.exe" }
@@ -739,9 +732,10 @@ jobs:
 
             | File | Contents | Use |
             |---|---|---|
-            | `RDPWrapper.zip` | rdpwrap DLLs, C# tools (x64/x86/arm64), rdpWrapper GUI, rdpwrap.ini | **Main install package** — extract and run `RDPWInst_x64.exe -i -o` (or matching arch) |
+            | `RDPWrapper-<ver>-x64.msi` | Windows Installer — native install, registry, service, firewall | **Recommended** — double-click to install; uninstall via Add/Remove Programs |
+            | `RDPWrapper.zip` | rdpwrap DLLs, RDPConf + RDPCheck (x64/x86/arm64), rdpWrapper GUI, rdpwrap.ini | Extract and use RDPConf for configuration; MSI is the recommended install method |
             | `RDPWrapper-SelfContained.zip` | Same C# tools bundled with .NET runtime (no separate runtime install needed) | Use when .NET 10 Desktop Runtime cannot be deployed |
-            | `RDPWrapper-<ver>-x64.msi` / `x86` / `arm64` | Windows Installer packages — GUI-friendly, self-registering uninstall | Preferred for managed/enterprise deployments |
+            | `RDPWrapper-<ver>-x86.msi` / `arm64` | Same MSI, 32-bit and arm64 editions | Use when targeting 32-bit or arm64 Windows |}
             | `RDPWrapOffsetFinder.zip` | RDPWrapOffsetFinder.exe + Zydis.dll for x64 and x86 | Generate offsets for an unknown termsrv.dll version manually |
 
             ### Merged pull requests
@@ -767,9 +761,6 @@ jobs:
             rdpwrap_x64.dll
             rdpwrap_x86.dll
             rdpwrap_arm64.dll
-            RDPWInst_x64.exe
-            RDPWInst_x86.exe
-            RDPWInst_arm64.exe
             RDPConf_x64.exe
             RDPConf_x86.exe
             RDPConf_arm64.exe

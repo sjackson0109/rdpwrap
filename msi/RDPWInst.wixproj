@@ -8,9 +8,20 @@
       dotnet build msi/RDPWInst.wixproj -c Release /p:Platform=arm64 /p:PackageVersion=yy.M.d
 
     Each build expects arch-specific inputs alongside this .wixproj:
-      RDPWInst_<arch>.exe  RDPConf_<arch>.exe  RDPCheck_<arch>.exe
+      RDPConf_<arch>.exe  RDPCheck_<arch>.exe
       rdpwrap_<arch>.dll   rdpwrap.ini
+    All install/uninstall logic is handled natively by WiX elements
+    (registry, ServiceControl, firewall) — no helper EXE is required or bundled.
   -->
+
+  <!-- WiX extension packages required by RDPWInst.wxs -->
+  <ItemGroup>
+    <!-- Util extension: provides WixQuietExec / WixQuietExec64 for deferred CAs
+         that run reg.exe to set/restore TermService\Parameters\ServiceDll -->
+    <PackageReference Include="WixToolset.Util.wixext"     Version="5.0.2" />
+    <!-- Firewall extension: FirewallException elements for TCP+UDP 3389 rules -->
+    <PackageReference Include="WixToolset.Firewall.wixext" Version="5.0.2" />
+  </ItemGroup>
   <PropertyGroup>
     <!-- OutputName includes arch so all three MSIs can coexist in the same output dir -->
     <OutputName>RDPWrapper-$(Platform)</OutputName>

@@ -121,7 +121,7 @@ All three C# tools are published as self-contained single-file executables using
 ### Commands
 
 ```powershell
-$TOOLS = @("RDPConf", "RDPCheck", "RDPWInst")
+$TOOLS = @("RDPConf", "RDPCheck")
 $RIDS  = @("win-x64", "win-x86", "win-arm64")
 
 foreach ($tool in $TOOLS) {
@@ -166,7 +166,7 @@ Copy-Item src-x86-x64-Fusix\x64\Release\RDPWrap.dll  build\rdpwrap_x64.dll
 Copy-Item src-x86-x64-Fusix\Release\RDPWrap.dll       build\rdpwrap_x86.dll
 
 # C# executables
-foreach ($tool in @("RDPConf","RDPCheck","RDPWInst")) {
+foreach ($tool in @("RDPConf","RDPCheck")) {
     foreach ($rid in @("win-x64","win-x86","win-arm64")) {
         $arch = $rid -replace "win-",""
         Copy-Item "build\staging\$tool\$rid\$tool.exe" `
@@ -190,9 +190,6 @@ build/
   RDPCheck_x64.exe      # RDP loopback tester (x64)
   RDPCheck_x86.exe      # RDP loopback tester (x86)
   RDPCheck_arm64.exe    # RDP loopback tester (ARM64)
-  RDPWInst_x64.exe      # CLI installer (x64)
-  RDPWInst_x86.exe      # CLI installer (x86)
-  RDPWInst_arm64.exe    # CLI installer (ARM64)
 ```
 
 > `./build/` is listed in `.gitignore` — artefacts are not committed.

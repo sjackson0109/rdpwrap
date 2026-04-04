@@ -3,17 +3,44 @@
   RDP Wrapper — MSI installer definition (WiX v5 / schema v4)
   Parameterised by MSBuild Platform: build once per arch.
 
+  All install / uninstall logic is implemented natively in WiX — no helper EXE
+  is launched as a CustomAction.  Operations performed by the MSI:
+
+    INSTALL
+      1. Stop TermService (ServiceControl)
+      2. Write payload files to [INSTALLFOLDER]:
+            rdpwrap.dll   rdpwrap.ini   RDPConf.exe   RDPCheck.exe
+      3. Write Terminal Services registry values
+      4. Set TermService\Parameters\ServiceDll → [INSTALLFOLDER]rdpwrap.dll
+             (deferred CA via WixQuietExec + reg.exe, because the value is
+              REG_EXPAND_SZ and must survive WOW64 registry reflection)
+      5. Add Remote Desktop firewall exceptions TCP+UDP 3389 (FirewallExtension)
+      6. Start TermService
+
+    UNINSTALL
+      1. Restore TermService\Parameters\ServiceDll → %SystemRoot%\System32\termsrv.dll
+             (deferred CA — must happen BEFORE StopServices so that when the
+              service restarts after uninstall it uses termsrv.dll, not the
+              now-deleted rdpwrap.dll)
+      2. Stop TermService
+      3. Remove payload files
+      4. Remove Terminal Services registry values
+      5. Remove firewall exceptions
+      6. Start TermService
+
   Build via:
     dotnet build msi/RDPWInst.wixproj -c Release /p:Platform=x64   /p:PackageVersion=yy.M.d
     dotnet build msi/RDPWInst.wixproj -c Release /p:Platform=x86   /p:PackageVersion=yy.M.d
     dotnet build msi/RDPWInst.wixproj -c Release /p:Platform=arm64 /p:PackageVersion=yy.M.d
 
   Required inputs alongside this file (produced by CI / build-local.ps1):
-    RDPWInst_<arch>.exe   RDPConf_<arch>.exe   RDPCheck_<arch>.exe
+    RDPConf_<arch>.exe   RDPCheck_<arch>.exe
     rdpwrap_<arch>.dll
     rdpwrap.ini  (shared — same file for all arches)
 -->
-<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util"
+     xmlns:fire="http://wixtoolset.org/schemas/v4/wxs/firewall">
 
   <!--
     $(var.Platform) is automatically set by WiX from the MSBuild Platform property.
@@ -23,14 +50,20 @@
     <?define Arch            = "x64" ?>
     <?define UpgradeCode     = "6623f60c-e84f-41e7-a55b-f42116500064" ?>
     <?define ProgramFilesDir = "ProgramFiles6432Folder" ?>
+    <?define UtilBinaryRef   = "Wix4UtilCA_X64" ?>
+    <?define WixQuietExecFn  = "WixQuietExec64" ?>
   <?elseif $(var.Platform) = "x86" ?>
     <?define Arch            = "x86" ?>
     <?define UpgradeCode     = "6623f60c-e84f-41e7-a55b-f42116500032" ?>
     <?define ProgramFilesDir = "ProgramFilesFolder" ?>
+    <?define UtilBinaryRef   = "Wix4UtilCA_X86" ?>
+    <?define WixQuietExecFn  = "WixQuietExec" ?>
   <?else ?>
     <?define Arch            = "arm64" ?>
     <?define UpgradeCode     = "6623f60c-e84f-41e7-a55b-f4211650aa64" ?>
     <?define ProgramFilesDir = "ProgramFiles6432Folder" ?>
+    <?define UtilBinaryRef   = "Wix4UtilCA_A64" ?>
+    <?define WixQuietExecFn  = "WixQuietExec64" ?>
   <?endif ?>
 
   <Package
@@ -62,63 +95,188 @@
       <ComponentGroupRef Id="ProductComponents" />
     </Feature>
 
-    <!-- ── Custom actions: run arch-native RDPWInst ──────────────────────── -->
-    <!--
-      -f (force): silently uninstalls any existing installation (bat- or
-      MSI-managed) before re-installing.  Prevents the "already installed"
-      error when upgrading from a previous MSI or a manual install.
+    <!-- ════════════════════════════════════════════════════════════════════
+         ServiceDll Custom Actions
+         ════════════════════════════════════════════════════════════════════
+
+         WiX deferred CAs run with elevated privileges and cannot read installer
+         properties directly.  The SetProperty (immediate) actions below format
+         the command-line strings while [INSTALLFOLDER] is still available, and
+         store the result as CustomActionData for the matching deferred CA.
+
+         WixQuietExec reads CustomActionData as the command to run silently.
     -->
+
+    <!-- On INSTALL: write ServiceDll = [INSTALLFOLDER]rdpwrap.dll -->
+    <SetProperty
+      Id="CA_SetServiceDll"
+      Value="&quot;[SystemFolder]reg.exe&quot; add &quot;HKLM\SYSTEM\CurrentControlSet\Services\TermService\Parameters&quot; /v ServiceDll /t REG_EXPAND_SZ /d &quot;[INSTALLFOLDER]rdpwrap.dll&quot; /f"
+      Before="CA_SetServiceDll"
+      Sequence="execute" />
+
     <CustomAction
-      Id="InstallWrap"
-      FileRef="RDPWInstExe"
-      ExeCommand="-i -o -f"
+      Id="CA_SetServiceDll"
+      BinaryRef="$(var.UtilBinaryRef)"
+      DllEntry="$(var.WixQuietExecFn)"
       Execute="deferred"
       Impersonate="no"
       Return="check" />
 
+    <!-- On UNINSTALL: restore ServiceDll = %SystemRoot%\System32\termsrv.dll -->
+    <SetProperty
+      Id="CA_RestoreServiceDll"
+      Value="&quot;[SystemFolder]reg.exe&quot; add &quot;HKLM\SYSTEM\CurrentControlSet\Services\TermService\Parameters&quot; /v ServiceDll /t REG_EXPAND_SZ /d &quot;%SystemRoot%\System32\termsrv.dll&quot; /f"
+      Before="CA_RestoreServiceDll"
+      Sequence="execute" />
+
     <CustomAction
-      Id="UninstallWrap"
-      FileRef="RDPWInstExe"
-      ExeCommand="-u"
+      Id="CA_RestoreServiceDll"
+      BinaryRef="$(var.UtilBinaryRef)"
+      DllEntry="$(var.WixQuietExecFn)"
       Execute="deferred"
       Impersonate="no"
       Return="check" />
 
+    <!-- ── Execute sequence ─────────────────────────────────────────────── -->
     <InstallExecuteSequence>
-      <!-- Run install wrapper after files land; skip only when THIS product is
-           being removed as the OLD side of an upgrade (UPGRADINGPRODUCTCODE set). -->
-      <Custom Action="InstallWrap"   After="InstallFiles"  Condition="NOT UPGRADINGPRODUCTCODE" />
-      <Custom Action="UninstallWrap" Before="RemoveFiles"  Condition="REMOVE AND NOT UPGRADINGPRODUCTCODE" />
+      <!--
+        Install:   set ServiceDll after registry and files are in place,
+                   but before StartServices restarts TermService.
+        Uninstall: restore ServiceDll BEFORE StopServices so that when
+                   StartServices runs at the end of uninstall, TermService
+                   can load termsrv.dll (which is still on disk at that point).
+      -->
+      <Custom Action="CA_SetServiceDll"     After="WriteRegistryValues"
+              Condition="NOT REMOVE" />
+      <Custom Action="CA_RestoreServiceDll" Before="StopServices"
+              Condition="REMOVE" />
     </InstallExecuteSequence>
   </Package>
 
-  <!-- ── Component group ─────────────────────────────────────────────────── -->
+  <!-- ════════════════════════════════════════════════════════════════════════
+       Component Group
+       ════════════════════════════════════════════════════════════════════════ -->
   <Fragment>
     <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
 
-      <!-- RDPWInst (installer / uninstaller tool) -->
-      <Component Id="RDPWInstExe_Comp" Guid="*">
-        <File Id="RDPWInstExe" Source="RDPWInst_$(var.Arch).exe" KeyPath="yes" />
-      </Component>
+      <!-- ── rdpwrap.dll — core RDP wrapper DLL ─────────────────────────── -->
+      <!--
+        Source filename is arch-qualified (rdpwrap_x64.dll etc.) so CI can stage
+        all arches in the same directory; Name ensures the installed name is always
+        "rdpwrap.dll" regardless of arch suffix.
 
-      <!-- RDPConf (configuration GUI) -->
-      <Component Id="RDPConfExe_Comp" Guid="*">
-        <File Id="RDPConfExe" Source="RDPConf_$(var.Arch).exe" KeyPath="yes" />
-      </Component>
+        ServiceControl lives here so the stop/start is tied to the component that
+        owns the DLL being swapped out.  Stop="both" / Start="both" means the
+        service is stopped before and restarted after every install, upgrade, or
+        uninstall — ensuring TermService never tries to load a partially written
+        or already-deleted rdpwrap.dll.
 
-      <!-- RDPCheck (RDP loopback tester) -->
-      <Component Id="RDPCheckExe_Comp" Guid="*">
-        <File Id="RDPCheckExe" Source="RDPCheck_$(var.Arch).exe" KeyPath="yes" />
-      </Component>
-
-      <!-- rdpwrap.dll (core DLL) -->
+        FirewallException elements are also co-located with the DLL: they are
+        added at install time and removed automatically when this component is
+        removed (uninstall / upgrade).
+      -->
       <Component Id="RdpwrapDll_Comp" Guid="*">
-        <File Source="rdpwrap_$(var.Arch).dll" KeyPath="yes" />
+        <File Id="RdpwrapDll"
+              Source="rdpwrap_$(var.Arch).dll"
+              Name="rdpwrap.dll"
+              KeyPath="yes" />
+
+        <!-- Stop TermService before the DLL is laid down; restart after config -->
+        <ServiceControl Id="TermService_Control"
+                        Name="TermService"
+                        Stop="both"
+                        Start="both"
+                        Wait="yes" />
+
+        <!-- Remote Desktop firewall rules — created on install, removed on uninstall -->
+        <fire:FirewallException
+          Id="RDP_TCP"
+          Name="Remote Desktop"
+          Port="3389"
+          Protocol="tcp"
+          Profile="all"
+          Scope="any" />
+
+        <fire:FirewallException
+          Id="RDP_UDP"
+          Name="Remote Desktop (UDP)"
+          Port="3389"
+          Protocol="udp"
+          Profile="all"
+          Scope="any" />
       </Component>
 
-      <!-- rdpwrap.ini (offset database — same file for all arches) -->
+      <!-- ── rdpwrap.ini — patch / offset database ───────────────────────── -->
       <Component Id="RdpwrapIni_Comp" Guid="*">
-        <File Source="rdpwrap.ini" KeyPath="yes" />
+        <File Id="RdpwrapIni" Source="rdpwrap.ini" KeyPath="yes" />
+      </Component>
+
+      <!-- ── RDPConf — configuration GUI ────────────────────────────────── -->
+      <Component Id="RDPConfExe_Comp" Guid="*">
+        <File Id="RDPConfExe"
+              Source="RDPConf_$(var.Arch).exe"
+              Name="RDPConf.exe"
+              KeyPath="yes" />
+      </Component>
+
+      <!-- ── RDPCheck — loopback RDP connectivity tester ─────────────────── -->
+      <Component Id="RDPCheckExe_Comp" Guid="*">
+        <File Id="RDPCheckExe"
+              Source="RDPCheck_$(var.Arch).exe"
+              Name="RDPCheck.exe"
+              KeyPath="yes" />
+      </Component>
+
+      <!-- ── Terminal Services registry configuration ─────────────────────── -->
+      <!--
+        All values below are REMOVED when this component is uninstalled (MSI
+        default behaviour for RegistryValue elements).  Removing fDenyTSConnections
+        restores the system default (deny remote connections), which is the correct
+        post-uninstall state on a workstation.  The remaining keys revert by absence.
+      -->
+      <Component Id="TSConfig_Comp" Guid="*">
+
+        <!-- Allow remote desktop connections -->
+        <RegistryValue
+          Root="HKLM"
+          Key="SYSTEM\CurrentControlSet\Control\Terminal Server"
+          Name="fDenyTSConnections"
+          Value="0"
+          Type="integer"
+          KeyPath="yes" />
+
+        <!-- Allow concurrent (multi-user) sessions -->
+        <RegistryValue
+          Root="HKLM"
+          Key="SYSTEM\CurrentControlSet\Control\Terminal Server\Licensing Core"
+          Name="EnableConcurrentSessions"
+          Value="1"
+          Type="integer" />
+
+        <!-- Allow multiple TS sessions via Winlogon -->
+        <RegistryValue
+          Root="HKLM"
+          Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
+          Name="AllowMultipleTSSessions"
+          Value="1"
+          Type="integer" />
+
+        <!-- Allow remote RPC access -->
+        <RegistryValue
+          Root="HKLM"
+          Key="SYSTEM\CurrentControlSet\Control\Terminal Server"
+          Name="AllowRemoteRPC"
+          Value="1"
+          Type="integer" />
+
+        <!-- Allow linked connections (required by certain group policies) -->
+        <RegistryValue
+          Root="HKLM"
+          Key="SYSTEM\CurrentControlSet\Control\Terminal Server"
+          Name="EnableLinkedConnections"
+          Value="1"
+          Type="integer" />
+
       </Component>
 
     </ComponentGroup>

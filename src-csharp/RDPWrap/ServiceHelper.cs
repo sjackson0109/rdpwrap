@@ -140,6 +140,27 @@ public static class ServiceHelper
         finally { NativeMethods.CloseServiceHandle(hSC); }
     }
 
+    // ── Wait for running state ────────────────────────────────────────────────
+
+    /// <summary>
+    /// Polls until <paramref name="serviceName"/> reaches
+    /// <c>SERVICE_RUNNING</c> or <paramref name="timeoutSeconds"/> elapses.
+    /// Returns <c>true</c> if the service reached the running state.
+    /// </summary>
+    public static bool WaitForRunning(string serviceName, int timeoutSeconds = 30)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(timeoutSeconds);
+        while (DateTime.UtcNow < deadline)
+        {
+            int state = GetCurrentState(serviceName);
+            if (state == (int)NativeMethods.SERVICE_RUNNING) return true;
+            // Stop waiting if the service has stopped/failed
+            if (state == (int)NativeMethods.SERVICE_STOPPED) return false;
+            Thread.Sleep(500);
+        }
+        return GetCurrentState(serviceName) == (int)NativeMethods.SERVICE_RUNNING;
+    }
+
     // ── Process-info enumeration ──────────────────────────────────────────────
 
     /// <summary>
@@ -186,12 +207,16 @@ public static class ServiceHelper
                     out _, out uint returned, ref resumeHandle, null))
                     return result;
 
-                // ENUM_SERVICE_STATUS_PROCESS layout (Unicode, packed):
-                //   IntPtr  lpServiceName  (pointer to string)
-                //   IntPtr  lpDisplayName  (pointer to string)
+                // ENUM_SERVICE_STATUS_PROCESS layout (Unicode):
+                //   IntPtr  lpServiceName  (pointer to string)       — 4 or 8 bytes
+                //   IntPtr  lpDisplayName  (pointer to string)       — 4 or 8 bytes
                 //   SERVICE_STATUS_PROCESS (9 × DWORD = 36 bytes)
+                // The struct is padded to a multiple of pointer-size (natural alignment):
+                //   64-bit: 8+8+36 = 52 → round up to 56
+                //   32-bit: 4+4+36 = 44 → already aligned
                 int ptrSize   = IntPtr.Size;
-                int entrySize = ptrSize * 2 + 36;   // 2 string pointers + status struct
+                int rawSize   = ptrSize * 2 + 36;
+                int entrySize = (rawSize + ptrSize - 1) & ~(ptrSize - 1);
 
                 for (int i = 0; i < (int)returned; i++)
                 {

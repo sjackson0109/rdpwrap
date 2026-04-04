@@ -56,6 +56,26 @@ function Find-MSBuild {
     return $null
 }
 
+function Invoke-MSBuild([string]$MSBuildExe, [string[]]$MSBuildArgs) {
+    # Run MSBuild in an isolated cmd.exe subprocess so that VS 2019 MSBuild
+    # (v16, .NET Framework) is not contaminated by the parent process's .NET
+    # runtime.  Without this, .NET 10 assemblies break the MarvinHash type
+    # initializer (MSB4136 / System.Configuration crash).
+    $argStr = ($MSBuildArgs | ForEach-Object {
+        if ($_ -match '\s') { "`"$_`"" } else { $_ }
+    }) -join ' '
+    $bat = [System.IO.Path]::GetTempFileName() -replace '\.tmp$', '.bat'
+    @(
+        '@echo off',
+        'set MSBuildEnableWorkloadResolver=false',
+        'set MSBUILDUSESERVER=0',
+        ("`"{0}`" {1}" -f $MSBuildExe, $argStr)
+    ) | Set-Content $bat -Encoding ASCII
+    $proc = Start-Process 'cmd.exe' -ArgumentList @('/c', $bat) -Wait -PassThru -NoNewWindow
+    Remove-Item $bat -Force -ErrorAction SilentlyContinue
+    return $proc.ExitCode
+}
+
 # ─── 0. Stamp INI date ────────────────────────────────────────────────────────
 
 Step "Stamping rdpwrap.ini with today's date"
@@ -63,12 +83,6 @@ $today   = Get-Date -Format "yyyy-MM-dd"
 $iniFile = "$REPO\msi\rdpwrap.ini"
 (Get-Content $iniFile) -replace '^Updated=.*', "Updated=$today" | Set-Content $iniFile
 Write-Host "  Updated= $today"
-
-# Stage INI into RDPWInst embedded resources so it gets compiled in
-$iniDest = "$REPO\src-csharp\RDPWInst\Resources\rdpwrap.ini"
-New-Item -Force -ItemType Directory (Split-Path $iniDest) | Out-Null
-Copy-Item $iniFile $iniDest -Force
-Write-Host "  Staged:  src-csharp/RDPWInst/Resources/rdpwrap.ini"
 
 # ─── 1. Icons ─────────────────────────────────────────────────────────────────
 
@@ -88,19 +102,36 @@ if (-not $SkipCpp) {
     }
     Write-Host "  Using MSBuild: $msbuild"
 
+    # Derive the platform toolset from the VS version that owns this MSBuild.
+    # VS 2022 → v143, VS 2019 → v142, VS 2017 → v141.  Default to v143.
+    $toolset = switch -Wildcard ($msbuild) {
+        "*2022*" { "v143" }
+        "*2019*" { "v142" }
+        "*2017*" { "v141" }
+        default  { "v143" }
+    }
+    Write-Host "  Platform toolset: $toolset"
+
+    # VS 2019 MSBuild (v16, .NET Framework) crashes with System.MarvinHash when
+    # .NET 9+ SDK is on PATH.  Disabling the workload resolver and build server
+    # prevents MSBuild from loading incompatible .NET Core assemblies.
+    $env:MSBuildEnableWorkloadResolver = "false"
+    $env:MSBUILDUSESERVER               = "0"
+
     $msbuildArgs = @(
         "$REPO\src-x86-x64-Fusix\RDPWrap.sln",
         "/p:Configuration=Release",
-        "/p:PlatformToolset=v143",
+        "/p:PlatformToolset=$toolset",
         "/p:WindowsTargetPlatformVersion=10.0",
         "/m", "/v:m"
     )
 
-    foreach ($platform in @("x64", "Win32", "ARM64")) {
+    foreach ($platform in @("x64", "Win32")) {
         Write-Host "  Building $platform..."
-        & $msbuild @msbuildArgs "/p:Platform=$platform"
-        if ($LASTEXITCODE -ne 0) { Fail "MSBuild failed for $platform" }
+        $exitCode = Invoke-MSBuild $msbuild ($msbuildArgs + @("/p:Platform=$platform"))
+        if ($exitCode -ne 0) { Fail "MSBuild failed for $platform" }
     }
+    Write-Host "  [note] ARM64 C++ DLL not in this solution — arm64 MSI/EXEs will be C#-only."
 } else {
     Write-Host "[skip] C++ DLL build (-SkipCpp)" -ForegroundColor Yellow
 }
@@ -113,7 +144,7 @@ Step "Publishing C# tools"
 $dotnetVer = (dotnet --version 2>&1)
 Write-Host "  .NET SDK: $dotnetVer"
 
-$tools = @("RDPConf", "RDPCheck", "RDPWInst")
+$tools = @("RDPConf", "RDPCheck")
 $rids  = @("win-x64", "win-x86", "win-arm64")
 
 foreach ($tool in $tools) {
@@ -192,8 +223,9 @@ if (-not $SkipMsi) {
 
     foreach ($arch in @('x64', 'x86', 'arm64')) {
         # Verify this arch's inputs exist in build/
+        # The MSI implements all install/uninstall logic natively via WiX elements
+        # (registry, service control, firewall).  No helper EXE is included.
         $required = @(
-            "$BUILD\RDPWInst_$arch.exe",
             "$BUILD\RDPConf_$arch.exe",
             "$BUILD\RDPCheck_$arch.exe",
             "$BUILD\rdpwrap_$arch.dll",
@@ -210,10 +242,10 @@ if (-not $SkipMsi) {
             Copy-Item $inputFile "$REPO\msi\" -Force -ErrorAction Continue
         }
 
-        # Explicit OutputPath per-arch avoids WiX placing all builds in the same bin/x86 dir.
-        # Explicit OutputName overrides the $(Platform) token which WiX doesn't expand in OutputName.
-        $outDir  = Join-Path $REPO "msi_out\$arch"
-        $wixOut  = Join-Path $outDir "RDPWrapper-$arch.msi"
+        # WiX output goes into a per-arch staging subdir inside build/ so that
+        # the .wixpdb and any WiX temp files stay out of the root of build/.
+        # The .msi is then promoted to the root of build/ with a versioned name.
+        $outDir = Join-Path $BUILD "msi_staging\$arch"
         New-Item -Force -ItemType Directory $outDir | Out-Null
 
         # Use Continue so a non-zero exit from dotnet/WiX does NOT throw under ErrorActionPreference=Stop
@@ -230,11 +262,10 @@ if (-not $SkipMsi) {
             continue
         }
 
-        $msiSrc = if (Test-Path $wixOut) {
-            Get-Item $wixOut
-        } else {
-            # Fallback: WiX may insert a locale subdir (e.g. msi_out/x64/en-US/…)
-            Get-ChildItem $outDir -Recurse -Filter "RDPWrapper-$arch.msi" -ErrorAction SilentlyContinue |
+        $msiSrc = Get-Item (Join-Path $outDir "RDPWrapper-$arch.msi") -ErrorAction SilentlyContinue
+        if (-not $msiSrc) {
+            # WiX may insert a locale subdir (e.g. build/msi_staging/x64/en-US/…)
+            $msiSrc = Get-ChildItem $outDir -Recurse -Filter "RDPWrapper-$arch.msi" -ErrorAction SilentlyContinue |
                 Sort-Object LastWriteTime -Descending | Select-Object -First 1
         }
         if ($msiSrc) {
@@ -245,6 +276,14 @@ if (-not $SkipMsi) {
             Write-Warning "  MSI output not found after $arch build."
         }
     }
+
+    # Clean up staged binary inputs from msi/ and the msi_staging temp tree
+    $msiKeep = @('RDPWInst.wixproj','RDPWInst.wxs','global.json','rdpwrap.ini','rdpwrap-arm-kb.ini')
+    Get-ChildItem "$REPO\msi\" -File |
+        Where-Object { $_.Name -notin $msiKeep } |
+        Remove-Item -Force -ErrorAction SilentlyContinue
+    Remove-Item -Recurse -Force (Join-Path $BUILD 'msi_staging') -ErrorAction SilentlyContinue
+    Write-Host "  Cleaned staged inputs from msi/ and build/msi_staging/"
 } else {
     Write-Host "[skip] MSI build (-SkipMsi)" -ForegroundColor Yellow
 }

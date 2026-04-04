@@ -6,11 +6,10 @@ Both `build-and-release.yml` and `build-csharp.yml` include a code-signing step 
 
 ## What gets signed
 
-All six framework-dependent executables and all six self-contained executables produced per release:
+All C# executables produced per release:
 
 | File | Contents |
 |---|---|
-| `RDPWInst_x64.exe`, `RDPWInst_x86.exe`, `RDPWInst_arm64.exe` | CLI installer |
 | `RDPConf_x64.exe`, `RDPConf_x86.exe`, `RDPConf_arm64.exe` | GUI configuration tool |
 | `RDPCheck_x64.exe`, `RDPCheck_x86.exe`, `RDPCheck_arm64.exe` | GUI connection tester |
 | `*_sc.exe` variants | Self-contained copies of the above |
@@ -82,7 +81,7 @@ After a signed release is published:
 
 ```powershell
 # Check signature status
-Get-AuthenticodeSignature .\RDPWInst_x64.exe | Format-List
+Get-AuthenticodeSignature .\RDPConf_x64.exe | Format-List
 
 # Expected output (commercial cert):
 # Status     : Valid

@@ -19,7 +19,7 @@ permissions:
   contents: write
 
 jobs:
-  # â”€â”€ Build x64 and Win32 release DLLs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # Build x64 and Win32 release DLLs for the rdpwrap C++ wrapper.
   build:
     runs-on: windows-2022
     strategy:

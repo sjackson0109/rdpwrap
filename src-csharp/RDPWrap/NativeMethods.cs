@@ -17,7 +17,7 @@ using System.Runtime.InteropServices;
 namespace RDPWrap.Common;
 
 /// <summary>
-/// All P/Invoke declarations used across RDPWInst, RDPConf and RDPCheck.
+/// All P/Invoke declarations used across RDPConf and RDPCheck.
 /// Mirrors the unhooked Win32 imports from the original Delphi sources.
 /// </summary>
 internal static class NativeMethods
@@ -446,7 +446,7 @@ internal static class NativeMethods
         uint ObjectType, uint SecurityInfo,
         IntPtr psidOwner, IntPtr psidGroup, IntPtr pDacl, IntPtr pSacl);
 
-    [DllImport(Advapi32, SetLastError = true)]
+    [DllImport(Kernel32, SetLastError = true)]
     internal static extern IntPtr LocalFree(IntPtr hMem);
 
     // ─── winsta.dll ───────────────────────────────────────────────────────────
